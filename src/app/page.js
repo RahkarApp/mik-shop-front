@@ -1,6 +1,6 @@
 import HomePageBuilder from '@/components/templates/HomePageBuilder';
 import { getSiteConfig } from '@/services/siteConfigService';
-import {getServerTenantId,getServerStoreHost} from '@/services/tenantResolver';
+import {getServerTenantId,getServerStoreHost,isStoreAddressMissing} from '@/services/tenantResolver';
 import { buildMetadataFromConfig } from '@/utils/metadata';
 
 /**
@@ -8,6 +8,7 @@ import { buildMetadataFromConfig } from '@/utils/metadata';
  * عنوان و توضیحات با تغییر Tenant عوض می‌شوند
  */
 export async function generateMetadata() {
+  if (await isStoreAddressMissing()) return { title: 'آدرس فروشگاه را به درستی وارد کنید' };
   const config = await getSiteConfig(await getServerTenantId(),await getServerStoreHost());
   return buildMetadataFromConfig(config);
 }
