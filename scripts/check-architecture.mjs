@@ -23,7 +23,7 @@ visit(src);
 const api=readFileSync(join(ROOT,'src/services/api.js'),'utf8');
 if(!api.includes("'real'")&&!api.includes('isDemo'))fail('No fail-closed real mode');
 if(!api.includes('no-store'))fail('API lacks no-store fetch');
-if(!existsSync(join(ROOT,'.env.example')))fail('Missing API environment documentation');
+if(!existsSync(join(ROOT,'.env')))fail('Missing runtime environment configuration');
 console.log(`${project}: ${jsFiles} JS files, ${rules.length} agent/rule files, ${failures.length} architecture violations`);
 for(const e of failures)console.error('- '+e);
 if(failures.length)process.exitCode=1;

@@ -136,7 +136,8 @@ async function serverRequest(target,{method,headers,body,signal}) {
  const url=new URL(target); if(!['http:','https:'].includes(url.protocol))throw new Error('Backend protocol invalid');
  const lib=await import(/* webpackIgnore: true */ url.protocol==='https:'?'node:https':'node:http');
  return new Promise((resolve,reject)=>{
-  const req=lib.request(url,{method,headers:{...headers,'Content-Length':Buffer.byteLength(body||'')},signal,timeout:15000},res=>{
+  // TLS identifies the fixed upstream; HTTP Host still identifies the store.
+  const req=lib.request(url,{servername:url.hostname,method,headers:{...headers,'Content-Length':Buffer.byteLength(body||'')},signal,timeout:15000},res=>{
    const chunks=[];let size=0;
    res.on('data',chunk=>{size+=chunk.length;if(size>1024*1024){req.destroy(new Error('پاسخ بک‌اند بیش از حد بزرگ است'));return;}chunks.push(chunk);});
    res.on('end',()=>{const raw=Buffer.concat(chunks).toString('utf8');resolve({ok:res.statusCode>=200&&res.statusCode<300,status:res.statusCode,json:async()=>JSON.parse(raw)});});

@@ -29,7 +29,8 @@ async function forward(request,{params}){
     const library=await import(target.protocol==='https:'?'node:https':'node:http');
     const body=request.method==='GET'?undefined:await request.text();
     const upstream=await new Promise((resolve,reject)=>{
-      const upstreamRequest=library.request(target,{method:request.method,headers:{...headers,...(body?{'Content-Length':Buffer.byteLength(body)}:{})},timeout:15000},response=>{
+      // TLS identifies the fixed upstream; HTTP Host still identifies the store.
+      const upstreamRequest=library.request(target,{servername:target.hostname,method:request.method,headers:{...headers,...(body?{'Content-Length':Buffer.byteLength(body)}:{})},timeout:15000},response=>{
         const parts=[];let total=0;
         response.on('data',chunk=>{total+=chunk.length;if(total>1024*1024)upstreamRequest.destroy(new Error('Oversize'));else parts.push(chunk)});
         response.on('end',()=>resolve({status:response.statusCode,body:Buffer.concat(parts).toString('utf8')}));

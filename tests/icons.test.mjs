@@ -11,6 +11,16 @@ const require = createRequire(import.meta.url);
 const icons = require('lucide-react');
 const sourceRoot = fileURLToPath(new URL('../src/', import.meta.url));
 
+test('Lucide version is pinned and matches the lockfile and installed package', () => {
+  const manifest = require('../package.json');
+  const lock = require('../package-lock.json');
+  const version = manifest.dependencies['lucide-react'];
+  assert.match(version, /^\d+\.\d+\.\d+$/, 'Lucide must use an exact version');
+  assert.equal(lock.packages[''].dependencies['lucide-react'], version);
+  assert.equal(lock.packages['node_modules/lucide-react'].version, version);
+  assert.equal(require('lucide-react/package.json').version, version);
+});
+
 function sourceFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
     const path = join(directory, entry.name);
