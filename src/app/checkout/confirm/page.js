@@ -1,0 +1,2 @@
+import Link from 'next/link';
+export default function Confirm(){return <main className="max-w-xl mx-auto p-8 bg-white rounded-2xl border text-center"><h1 className="text-xl font-bold">وضعیت سفارش</h1><p className="my-4">ثبت سفارش و پرداخت تنها با تأیید سرور معتبر است. لطفاً آخرین وضعیت را در سفارش‌های من بررسی کنید.</p><Link className="text-primary underline" href="/orders">سفارش‌های من</Link></main>}

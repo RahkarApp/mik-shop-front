@@ -1,0 +1,34 @@
+---
+description: قواعد Refactor و baseline رگرسیون بدون تغییر محصول برای Shapsaz
+alwaysApply: false
+---
+
+# قانون ۳ از ۳ — Refactor و حفظ رفتار شاپ‌ساز
+
+> فقط هنگام Refactor، انتقال منطق، حذف فایل یا پاکسازی همراه `AGENTS.md` و `rules/10-web-storefront-project.mdc` خوانده شود. Refactor ساده‌سازی **ساختار داخلی** است، نه تغییر محصول یا API.
+
+## پیش از ویرایش
+
+1. Scope، Page، Component، Hook، Context، Service، همه Consumerها، Baseline رفتاری و تست‌های موجود را ثبت کن.
+2. برای باگ مهم تا حد امکان تست بازتولید بنویس؛ اصلاح رفتار را از تغییر ساختار در Diff جدا کن.
+3. تقسیم فایل فقط وقتی مسئولیت را روشن‌تر می‌کند مجاز است؛ Repository، Factory، Wrapper، Generic CRUD، State Manager و Helper بی‌ارزش نساز.
+4. قرارداد واقعی را بخوان؛ موجودبودن Route معادل کارکرد صحیح آن نیست. Backend را تغییر نده و پاسخ موفق جعلی نساز.
+
+## Baseline غیرقابل‌تغییر (مگر درخواست صریح)
+
+- قالب واحد Variant A، Layout، Header/Footer، RTL، فونت، فاصله‌ها، Responsive، Accessibility، SEO، Favicon، رنگ و عنوان برگرفته از Config ثابت بمانند.
+- Routing، Deep Link، SSR/Metadata، Redirect، Login و همه Loading/Error/Empty States ثابت بمانند. Server Component فقط برای SSR می‌تواند از Domain Service استفاده کند.
+- `Host → Store → req.store.user` مرز Tenant است و Proxy هم‌دامنه حفظ شود. انتخاب Tenant در Demo وارد Real نشود؛ Store A هرگز Cart/Session/Config یا پاسخ Async متعلق به B نبیند.
+- مسیر `Page/Component → Hook/Context → Domain Service → api.js → Backend`، Demo مستقل و API-only بدون Socket/SSE پابرجا بماند.
+- شناسه‌های `productId` و `proUID` از Cart تا Quote حفظ شوند؛ داده فاسد Draft حذف شود، نه تبدیل به Variant یا قیمت حدسی.
+- `null` نامعلوم است؛ subtotal، shipping، discount، tax، total و ارز فقط از Quote معتبر. تغییر اقلام/نشانی/ارسال/روش پرداخت Quote را نامعتبر می‌کند.
+- ثبت Order فقط از قرارداد امن `/checkout/orders`؛ legacy `POST /order` ممنوع. Idempotency و عدم تکرار خودکار Mutation مالی و تأیید پرداخت سرور ثابت است.
+- Feature/Page Flagها فقط با `=== true` فعال‌اند؛ خاموشی قابلیت اختیاری خرید پایه را مسدود نکند. Backend مالک Permission/Scope نهایی است.
+- مسیرهای محصول، سرچ، دسته‌بندی، سبد، علاقه‌مندی، پروفایل، فاکتور، مرجوعی و صفحات محتوایی بدون درخواست صریح حذف/تغییر رفتار نکنند.
+
+## چک‌لیست هر تحویل
+
+1. Diff سورس، Importها، Routeها، Contract، Config، Adapter و مصرف‌کنندگان حذف‌شده را بررسی کن.
+2. `npm run check`، تست Cart/Checkout/Contract و در صورت نصب Dependency `npm run build` و مرورگر واقعی.
+3. Demo و Real را جدا بسنج؛ شکست Real نباید به Mock یا Order موفق تبدیل شود.
+4. تغییرات و نتیجه واقعی تست‌ها، آزمون‌های انجام‌نشده و وابستگی Backend را در `docs/PROJECT_HISTORY_FA.md` ثبت کن. تست Node برابر Build/Production نیست.

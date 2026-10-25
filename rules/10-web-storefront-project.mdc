@@ -1,0 +1,75 @@
+---
+description: قانون دائمی معماری، Tenant، خرید، API و قالب واحد پروژه Shapsaz
+alwaysApply: true
+---
+
+# قانون ۲ از ۳ — معماری و رفتار اختصاصی Shapsaz Web Storefront
+
+> همراه `AGENTS.md` قبل از هر تغییر خوانده شود. این فایل نقشه مسیر داده و قابلیت‌ها را نیز دارد تا قانون دیگری لازم نباشد. قرارداد API در `docs/BACKEND_CONNECTION_GUIDE_FA.md` است؛ وضعیت Backend را از آن بخوان و Endpoint جدید اختراع نکن.
+
+## هویت محصول و قالب
+
+- Shapsaz **پوسته فروشگاه آنلاین چندمستأجری** است؛ Backend Shop مطابق سند رسمی `docs/SHOP-API.html` داده‌های فروشگاه را در اختیار پوسته قرار می‌دهد. این مخزن Backoffice، Bot، Telegram Mini App و Monitoring نیست.
+- یک قالب ثابت تصویری (`storefront-v1` / Variant A) داریم؛ Componentهای Header، Footer، Product Card و Section با مدل‌های دیگر بر اساس Backend عوض نمی‌شوند. Config فقط برند، رنگ، اطلاعات Footer، محتوا، SEO و Feature/Page Flags را تأمین می‌کند. ویژگی موجود را صرفاً به دلیل Flag غیرفعال با Layout خالی رها نکن؛ Empty/Unavailable باید درست مدیریت شود.
+- `SiteConfigContext` منبع تنظیمات فروشگاه Real است؛ `src/constants/config.js` جایگزین Config واقعی Backend نیست. هیچ نام، لوگو، آدرس، شبکه اجتماعی، favicon یا رنگ فروشگاه آزمایشی را در حالت Real ثابت نکن.
+
+## مسیر داده و استثناهای معنادار
+
+```text
+Next Route/Page → Feature/Presentational Component → Domain Hook یا Context
+    → Domain Service → src/services/api.js → (Route Mapping + Data Adapter)
+    → /api/shop/[...path] روی Host فروشگاه → mik-shop Backend REST
+Server-side SSR/Metadata → Domain Service → همان api.js → Backend با Host معتبر
+Demo صریح → mockApi/data محلی؛ هرگز fallback خودکار Real
+```
+
+- `src/app/`: Route، SSR/SEO و Navigation؛ Page دیگر را Import نکند. Server Component فقط برای دریافت اولیه/Metadata می‌تواند مستقیم Service را بخواند، نه Transport جدید بسازد.
+- `src/components/`: نمایش، فرم و Draft محلی؛ Component شبکه/Mock/Adapter خام را مستقیم صدا نزند. Feature Component می‌تواند Hook/Context همان قابلیت را مصرف کند.
+- `src/hooks/`: منطق دامنه سمت فرانت، lifecycle، Loading/Error، جلوگیری از state قدیمی پس از تعویض Tenant یا پارامتر، عملیات Mutation و UI mapping لازم.
+- `src/context/SiteConfigContext.js`: تنظیمات، Tenant فعال، قابلیت‌ها/صفحات، Theme و خطای بارگذاری. `src/components/shared/CartContext.js`: Draft سبدِ جداگانه هر فروشگاه؛ داده آن قیمت قطعی یا رزرو موجودی نیست.
+- `src/services/api.js`: تنها Transport REST، انتخاب Real/Demo، کنترل Timeout، خطای شبکه، پاسخ و GETهای همسان؛ هیچ retry پنهان Mutation. `productService.js`, `shopService.js`, `siteConfigService.js`: عملیات دامنه؛ بدون JSX/Hook.
+- `src/utils/backendRoutes.js`: نگاشت مسیرهای منطقی به Backend ارسالی و مسیرهای رسمی مشتری طبق نسخهٔ ۲۰۲۶/۱۰/۲۳. `src/utils/backendAdapter.js`: Normalize فیلدهای واقعی نظیر `uid`, `img`, `minPrice`, `inventory`, `proUID` بدون جعل داده.
+- `src/services/mockApi.js` و `src/data/store.js`: تنها Demo صریح؛ `src/services/inventorySync.js` نباید Socket/SSE اضافه کند. `src/utils/*` تا حد ممکن Pure و مستقل از React/Network.
+
+## مرز امنیتی Tenant و احراز هویت
+
+- سرویس Shop در قرارداد رسمی از `Host` معتبر به فروشگاه می‌رسد؛ binding در Backend بررسی می‌شود. `X-Store-Host` یا `X-Store-Id` مرجع شناسایی Backend کنونی نیستند.
+- مرورگر در Real فقط به `/api/shop/*` **هم‌دامنه** درخواست می‌فرستد؛ Route Handler `src/app/api/shop/[...path]/route.js` فقط Origin ثابت تنظیم‌شده را هدف می‌گیرد. Host ورودی باید در ورودی زیرساخت/Allowlist، معتبر و مالکیت‌سنجی شده باشد. Host، Forwarded Header، دامنه یا URL کاربر **نشانه احراز هویت یا مجوز نیست**.
+- SSR فقط Host سرور معتبر همان درخواست را به Service منتقل کند. Query `tenant`، Cookie انتخاب فروشگاه و TenantSwitcher فقط **Demo** هستند. پاسخ دیررس فروشگاه A نباید Config، Basket یا سفارش B را بازنویسی کند.
+- Session مشتری توکن opaque با پیشوند `shop_` است و فقط با `Authorization: Bearer` ارسال می‌شود؛ JWT مدیر یا سشن فروشگاه دیگر مجاز نیست. هیچ اطلاعات حساس و Token در Log یا URL منتشر نشود.
+
+## خرید و صحت اطلاعات مالی
+
+- صفحات Browse → Search/Category → Product/Variant → Cart → Checkout/start و رزرو → Quote → Order → Payment result → Order detail باید خطا/Loading/Empty واقعی داشته باشند.
+- محصول یا Variant نامعتبر/بدون موجودی نباید به سفارش قابل‌ثبت تبدیل شود. `proUID` شناسه **همان ترکیب** رنگ/سایز است و هنگام افزودن، تغییر تعداد و Quote حفظ شود؛ کلید Draft با محصول ساده یکی نباشد.
+- قیمت، موجودی، واحد پول (`TOMAN` مطابق Config/Quote)، مالیات، حمل، تخفیف و `total` فقط با پاسخ معتبر Backend تعیین می‌شوند. `null`/Missing را صفر یا «ارسال رایگان» نشان نده. جمع کالا، هزینه حمل، تخفیف، مالیات و مبلغ نهایی را با هم اشتباه نگیر.
+- هر تغییر مؤثر روی Cart/Variant/Address/Shipping/Payment، Quote قبلی را نامعتبر می‌کند؛ Order فقط با Quote معتبر و تأیید Backend ثبت می‌شود. **به `POST /order` قدیمی برای ثبت سفارش واقعی درخواست نده**: قرارداد جدید `POST /checkout/orders` در Backend جدید مستند و پیاده‌شده است؛ `202` پرداخت موفق نیست.
+- برای ثبت Order، Idempotency لازم است؛ در Timeout یا وضعیت نامشخص، بدون بررسی/هماهنگی سرور درخواست را خودکار تکرار نکن. بازگشت از Gateway موفقیت پرداخت نیست؛ فقط پاسخ تأییدشده سرور مالک وضعیت `paid` است.
+- صفحات سفارش، حساب، نشانی، علاقه‌مندی، دیدگاه، لغو/مرجوعی و Contact/Policy هر کدام باید فیلتر Tenant و مالکیت داده در Backend داشته باشند. نبود Endpoint/مجوز ⇒ خطای روشن، نه موفقیت ساختگی.
+
+## Config و Feature Flags
+
+- `features.*` و `pages.*` فقط با **boolean `true`** فعال‌اند؛ missing، `null`، `"true"` و `1` غیرفعال‌اند. Feature Gate سمت فرانت جایگزین بررسی دسترسی سمت Backend نیست.
+- نبود API اختیاری یا خاموش‌بودن یک قابلیت نباید کاتالوگ و خرید پایه را متوقف کند. هیچ درخواست اختیاری بی‌جهت ارسال نکن.
+- Branding شامل نام، لوگو، Favicon، Theme، Footer، تماس، SEO و سیاست‌ها است؛ فقط محتوا تغییر می‌کند نه ساختار قالب.
+
+## نقشه قابلیت‌های موجود
+
+| حوزه | Route / UI | مسیر اصلی بررسی |
+|---|---|---|
+| بوت و برندینگ | `src/app/layout.js`، `components/layout/ConfigAppShell.js`، Header/Footer | `SiteConfigContext`, `useSiteConfig`, `siteConfigService`, `tenantResolver` |
+| صفحه خانه، بنر و بلاگ | `/`، `components/sections/*`، `/blog` | `useBanners`, `useBlogPosts`, `useProducts`, `shopService` |
+| دسته‌بندی، جست‌وجو، فیلتر | `/category/[category]`، `/search-result` | `useCategories`, `useProducts`, `productService` |
+| جزئیات و تنوع محصول | `/[slug]`، `ProductDetailsClient` | `productService`, `backendAdapter`, `CartContext` |
+| سبد | `/cart`، `Cart`, `CartItem` | `CartContext`, `utils/cart.js` |
+| سفارش و پرداخت | `/checkout`, `/checkout/confirm`, `/payment/result` | `CheckoutClient`, `useShopActions`, `shopService` |
+| سوابق سفارش | `/orders`, `/orders/[id]` | `useOrders`, `shopService`, `useShopActions` |
+| ورود و حساب | `/login`, `/profile` | `ProfileClient`, `useShopActions`, `shopService` |
+| علاقه‌مندی و نظرات | `/wishlist`, `ReviewsPanel`, `WishlistFeature` | `useFeatures`, `useShopActions`, `shopService` |
+| اطلاعات فروشگاه | `/about`, `/contact`, `/faq`, `/return-policy` | `SiteConfigContext`, `shopService` |
+| مرز Transport/Tenant | `/api/shop/[...path]` | `services/api.js`, `utils/backendRoutes.js`, `utils/backendAdapter.js` |
+
+## تحویل
+
+- برای هر تغییر، مسیر داده و Consumerهای قابلیت را ببین. `npm run check`، تست Cart/Quote/Tenant و در صورت امکان Build/Browser اجرا شود.
+- Backend را ویرایش نکن. ایراد آن را با نام فایل، Route، Method و اصلاح موردنیاز در سند Backend ثبت کن. هر آزمونِ انجام‌نشده صریح اعلام شود.
