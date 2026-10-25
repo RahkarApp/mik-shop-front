@@ -4,6 +4,7 @@ import {cartItemKey, sanitizeCart, cartEstimate} from '../src/utils/cart.js';
 import {adaptStore} from '../src/utils/backendAdapter.js';
 import {formatMoney} from '../src/utils/format.js';
 import {readFileSync} from 'node:fs';
+import {validateStoreHost} from '../src/utils/storeHost.js';
 
 test('different SKU variants stay separate even when feature values look identical', () => {
  const p={id:'p-1',proUID:'red-small'};
@@ -29,7 +30,9 @@ test('production Host forwarding requires allowlist or verified ingress policy',
  const proxy=readFileSync(new URL('../src/app/api/shop/[...path]/route.js',import.meta.url),'utf8');
  assert.match(proxy,/SHOP_TRUSTED_HOST_INGRESS/);
  assert.match(proxy,/NODE_ENV==='production'/);
- assert.match(proxy,/allowed\.includes\(storeHost\)/);
+ assert.match(proxy,/validateStoreHost\(/);
+ assert.throws(()=>validateStoreHost('store.example',{production:true}),{code:'MISSING_HOST_POLICY'});
+ assert.throws(()=>validateStoreHost('other.example',{production:true,allowedHosts:'store.example',trustedIngress:true}),{status:403});
 });
 
 test('currency is server-controlled and unknown amounts never display a free price', () => {

@@ -2,6 +2,7 @@ import {isDemoRuntime} from '@/utils/demoRoute';
 /** Only HTTP transport. No sockets, implicit mocks, or automatic mutation replay. */
 import {backendRoute} from '@/utils/backendRoutes';
 import {adaptResponse} from '@/utils/backendAdapter';
+import {validateStoreHost} from '@/utils/storeHost';
 export const isDemo=process.env.NEXT_PUBLIC_DATA_MODE==='demo';
 let sessionToken='';
 const APP_VERSION=process.env.NEXT_PUBLIC_APP_VERSION||'0.1.0';
@@ -32,7 +33,11 @@ export async function api(path,{method='GET',body,tenantId,host,token,signal,ide
   const auth=token||getAccessToken();if(auth)headers.Authorization=`Bearer ${auth.replace(/^Bearer\s+/i,'')}`;
   headers['X-App-Version']=APP_VERSION;
   if(idempotencyKey)headers['Idempotency-Key']=idempotencyKey;
-  if(!browser&&host)headers.Host=host;
+  if(!browser)headers.Host=validateStoreHost(host||'',{
+    allowedHosts:process.env.SHOP_ALLOWED_HOSTS||'',
+    trustedIngress:process.env.SHOP_TRUSTED_HOST_INGRESS==='true',
+    production:process.env.NODE_ENV==='production',
+  });
   let requestBody=body;
   const key=method==='GET'&&!signal?`${url}|${auth}|${host||''}`:null;
   if(key&&inFlight.has(key))return inFlight.get(key);

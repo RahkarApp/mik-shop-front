@@ -36,6 +36,7 @@ Demo صریح → mockApi/data محلی؛ هرگز fallback خودکار Real
 - سرویس Shop در قرارداد رسمی از `Host` معتبر به فروشگاه می‌رسد؛ binding در Backend بررسی می‌شود. `X-Store-Host` یا `X-Store-Id` مرجع شناسایی Backend کنونی نیستند.
 - مرورگر در Real فقط به `/api/shop/*` **هم‌دامنه** درخواست می‌فرستد؛ Route Handler `src/app/api/shop/[...path]/route.js` فقط Origin ثابت تنظیم‌شده را هدف می‌گیرد. Host ورودی باید در ورودی زیرساخت/Allowlist، معتبر و مالکیت‌سنجی شده باشد. Host، Forwarded Header، دامنه یا URL کاربر **نشانه احراز هویت یا مجوز نیست**.
 - SSR فقط Host سرور معتبر همان درخواست را به Service منتقل کند. Query `tenant`، Cookie انتخاب فروشگاه و TenantSwitcher فقط **Demo** هستند. پاسخ دیررس فروشگاه A نباید Config، Basket یا سفارش B را بازنویسی کند.
+- `SHOP_ALLOWED_HOSTS` دامنه دقیق یا Wildcard تک‌سطحی مانند `*.shop.p.mikcore.ir` می‌پذیرد؛ Wildcard شامل دامنه پایه یا زیردامنه چندسطحی نیست. اعتبارسنجی مشترک Host در Proxy و SSR اجرا می‌شود؛ دامنه فروشگاه در هدر `Host` حفظ می‌شود، ولی مقصد اتصال و نام TLS همیشه از Origin ثابت بک‌اند می‌آیند. Allowlist جایگزین بررسی تعلق فروشگاه در بک‌اند نیست.
 - Session مشتری توکن opaque با پیشوند `shop_` است و فقط با `Authorization: Bearer` ارسال می‌شود؛ JWT مدیر یا سشن فروشگاه دیگر مجاز نیست. هیچ اطلاعات حساس و Token در Log یا URL منتشر نشود.
 
 ## خرید و صحت اطلاعات مالی

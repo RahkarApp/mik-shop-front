@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import {EventEmitter} from 'node:events';
+import {validateStoreHost} from '../src/utils/storeHost.js';
 const src=p=>readFileSync(new URL('../src/'+p,import.meta.url),'utf8');
 test('shop bearer token and app version and real OTP challenge are preserved',()=>{
  const s=src('services/api.js');
@@ -51,10 +52,11 @@ test('HTTPS uses the fixed backend TLS name while preserving the storefront Host
  });
  const proxy=src('app/api/shop/[...path]/route.js')
   .replace(/import \{NextResponse\} from 'next\/server';/,'')
+  .replace(/import \{validateStoreHost\} from '@\/utils\/storeHost';/,'')
   .replace(/\bexport /g,'')
-  .replace(/await import\([^;]+\)/,'transport');
+  .replace(/const library=[^;]+;/,'const library=transport;');
  const get=runInNewContext(proxy+';GET;',{
-  ...context,NextResponse:class extends Response {}
+  ...context,validateStoreHost,NextResponse:class extends Response {}
  });
  await get({method:'GET',headers:new Headers({host:'store.example'}),nextUrl:{search:''}},
   {params:Promise.resolve({path:['store','config']})});

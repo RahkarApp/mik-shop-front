@@ -1,5 +1,6 @@
 /** Same-origin API proxy so mik-shop sees the actual storefront domain in Host. */
 import {NextResponse} from 'next/server';
+import {validateStoreHost} from '@/utils/storeHost';
 export const runtime='nodejs';
 const PREFIXES=['store','product','auth','cart','orders','profile','addresses','wishlist','checkout','banners','blog','coupons','payments','shop-methods'];
 const METHODS=['GET','POST','PUT','PATCH','DELETE'];
@@ -8,17 +9,25 @@ async function forward(request,{params}){
   if(!origin)return NextResponse.json({status:false,message:'آدرس بک‌اند تنظیم نشده است'},{status:503});
   const {path}=await params;
   if(!path?.length||!PREFIXES.includes(path[0])||path.some(x=>!x||x==='.'||x==='..'||x.includes('/')))return NextResponse.json({status:false,message:'مسیر نامعتبر است'},{status:404});
-  const requestedHost=request.headers.get('host')||'';
-  let storeHost='';
-  try{const parsed=new URL(`http://${requestedHost}`);storeHost=parsed.hostname.toLowerCase();}catch{}
-  if(!storeHost||!/^([a-z0-9-]+\.)*[a-z0-9-]+$/.test(storeHost))return NextResponse.json({status:false,message:'دامنه نامعتبر است'},{status:400});
-  // For strict deployments, set allowlist at the ingress AND here; custom domains must be verified by backend.
-  const allowed=(process.env.SHOP_ALLOWED_HOSTS||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
-  const trustedIngress=process.env.SHOP_TRUSTED_HOST_INGRESS==='true';
-  if(process.env.NODE_ENV==='production' && !allowed.length && !trustedIngress) return NextResponse.json({status:false,message:'سیاست اعتبارسنجی دامنه فروشگاه تنظیم نشده است'},{status:503});
-  if(allowed.length&&!allowed.includes(storeHost))return NextResponse.json({status:false,message:'دامنه مجاز نیست'},{status:403});
+  let storeHost;
+  try {
+    storeHost=validateStoreHost(request.headers.get('host')||'',{
+      allowedHosts:process.env.SHOP_ALLOWED_HOSTS||'',
+      trustedIngress:process.env.SHOP_TRUSTED_HOST_INGRESS==='true',
+      production:process.env.NODE_ENV==='production',
+    });
+  } catch(error) {
+    return NextResponse.json({status:false,code:error.code,message:error.message},{status:error.status});
+  }
   // When using SHOP_TRUSTED_HOST_INGRESS, ingress MUST reject all unverified custom domains and untrusted Host overrides.
-  const target=new URL(`/${path.map(encodeURIComponent).join('/')}${request.nextUrl.search}`,origin);
+  let target;
+  try {
+    const backend=new URL(origin);
+    if(!['http:','https:'].includes(backend.protocol)||backend.username||backend.password||backend.pathname!=='/'||backend.search||backend.hash)throw new Error('Invalid backend origin');
+    target=new URL(`/${path.map(encodeURIComponent).join('/')}${request.nextUrl.search}`,backend);
+  } catch {
+    return NextResponse.json({status:false,code:'INVALID_BACKEND_ORIGIN',message:'آدرس بک‌اند نامعتبر است'},{status:503});
+  }
   const headers={Host:storeHost,Accept:'application/json'};
   const auth=request.headers.get('authorization');if(auth)headers.Authorization=auth;
   const contentType=request.headers.get('content-type');if(contentType?.startsWith('application/json'))headers['Content-Type']=contentType;
@@ -26,7 +35,7 @@ async function forward(request,{params}){
   const version=request.headers.get('x-app-version');if(version)headers['X-App-Version']=version;
   try {
     // Node HTTP request preserves verified Host; WHATWG fetch might overwrite it.
-    const library=await import(target.protocol==='https:'?'node:https':'node:http');
+    const library=target.protocol==='https:' ? await import('node:https') : await import('node:http');
     const body=request.method==='GET'?undefined:await request.text();
     const upstream=await new Promise((resolve,reject)=>{
       // TLS identifies the fixed upstream; HTTP Host still identifies the store.
