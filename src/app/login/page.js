@@ -1,4 +1,5 @@
 'use client';
+import {demoHref} from '@/utils/demoRoute';
 import {useState} from 'react';
 import {useRouter} from 'next/navigation';
 import {useShopActions} from '@/hooks/useShopActions';
@@ -14,7 +15,7 @@ export default function Login(){
    if(requiresName){
     if(!name.trim())throw new Error('برای تکمیل پروفایل، نام را وارد کنید');
     await updateProfile({name:name.trim()});
-    router.replace('/profile');router.refresh();return;
+    router.replace(demoHref('/profile'));router.refresh();return;
    }
    if(!challengeId){
     if(!/^09\d{9}$/.test(phone))throw new Error('شماره موبایل معتبر نیست');
@@ -25,7 +26,7 @@ export default function Login(){
    if(!/^\d{5}$/.test(code))throw new Error('کد تأیید باید پنج رقم باشد');
    const result=await verifyOtp(challengeId,code);
    if(result.requiresName===true||result.profilePending===true){setRequiresName(true);return;}
-   router.replace('/profile');router.refresh();
+   router.replace(demoHref('/profile'));router.refresh();
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
  return <main className="max-w-md mx-auto bg-white p-7 rounded-2xl border"><h1 className="text-xl font-bold mb-5">ورود به حساب</h1>

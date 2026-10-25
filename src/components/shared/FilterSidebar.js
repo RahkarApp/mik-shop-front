@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import {demoHref} from '@/utils/demoRoute';
 import { useState, useEffect } from "react";
 import { ChevronDown, Check } from "lucide-react";
 
@@ -80,7 +81,7 @@ export default function FilterSidebar() {
     } else {
       params.set("category", categoryId);
     }
-    router.push(`/search-result?${params.toString()}`);
+    router.push(demoHref(`/search-result?${params.toString()}`));
   };
 
   // رندر دسته‌بندی‌های تودرتو

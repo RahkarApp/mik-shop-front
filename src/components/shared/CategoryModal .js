@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import {demoHref} from '@/utils/demoRoute';
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, ChevronDown, Check } from "lucide-react";
@@ -57,7 +58,7 @@ export default function FilterModal({ isOpen, onClose }) {
   const toggleSubcategory = (categoryId) => {
     if (categoryId !== selectedCategory) {
       setSelectedCategory(categoryId);
-      router.push(`/category/${categoryId}`);
+      router.push(demoHref(`/category/${categoryId}`));
       onClose && onClose();
     } else {
       setSelectedCategory(null);

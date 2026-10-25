@@ -1,3 +1,4 @@
+import {isDemoRuntime} from '@/utils/demoRoute';
 /** Only HTTP transport. No sockets, implicit mocks, or automatic mutation replay. */
 import {backendRoute} from '@/utils/backendRoutes';
 import {adaptResponse} from '@/utils/backendAdapter';
@@ -7,22 +8,22 @@ const APP_VERSION=process.env.NEXT_PUBLIC_APP_VERSION||'0.1.0';
 export function setAccessToken(token) {
   sessionToken=token||'';
   if(typeof window!=='undefined') {
-    const key=`shopsaz-session:${window.location.hostname}`;
+    const key=`shopsaz-session:${isDemoRuntime()?"demo":"real"}:${window.location.hostname}`;
     if(sessionToken)sessionStorage.setItem(key,sessionToken);else sessionStorage.removeItem(key);
   }
 }
 export function getAccessToken() {
   if(typeof window==='undefined')return '';
   if(sessionToken)return sessionToken;
-  return sessionStorage.getItem(`shopsaz-session:${window.location.hostname}`)||'';
+  return sessionStorage.getItem(`shopsaz-session:${isDemoRuntime()?"demo":"real"}:${window.location.hostname}`)||'';
 }
 export function clearAccessToken(){setAccessToken('');}
 const inFlight=new Map();
 export async function api(path,{method='GET',body,tenantId,host,token,signal,idempotencyKey}={}){
-  if(isDemo)return demo(path,{method,body,tenantId});
+  const browser=typeof window!=='undefined';
+  if(isDemoRuntime() || (!browser && host==='__demo_preview__'))return demo(path,{method,body,tenantId,idempotencyKey});
   const remote=backendRoute(path,method);
   const backendMethod=(path==='/me' && method==='PATCH') ? 'PUT' : method;
-  const browser=typeof window!=='undefined';
   const origin=process.env.SHOP_BACKEND_ORIGIN || '';
   if(!browser&&!origin)throw new Error('SHOP_BACKEND_ORIGIN برای درخواست سمت سرور تنظیم نشده است');
   const url=browser?`/api/shop${remote}`:`${origin.replace(/\/$/,'')}${remote}`;
@@ -52,7 +53,7 @@ export async function api(path,{method='GET',body,tenantId,host,token,signal,ide
   if(key)inFlight.set(key,run);
   try{return await run;}finally{if(key)inFlight.delete(key);}
 }
-async function demo(path, { method, body, tenantId }) {
+async function demo(path, { method, body, tenantId, idempotencyKey }) {
   const m = await import('./mockApi');
   const pathname = path.split('?')[0];
   const q = new URLSearchParams(path.split('?')[1] || '');

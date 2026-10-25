@@ -1,5 +1,5 @@
 import React from 'react';
-import Link from 'next/link';
+import Link from '@/components/PreviewLink';
 import { getProductById } from '@/services/productService';
 import { getServerTenantId, getServerStoreHost } from '@/services/tenantResolver';
 import { getSiteConfig } from '@/services/siteConfigService';

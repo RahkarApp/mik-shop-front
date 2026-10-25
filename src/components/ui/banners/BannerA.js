@@ -4,7 +4,7 @@
  * BannerA — اسلایدر تمام‌عرض با Swiper
  */
 
-import Link from 'next/link';
+import Link from '@/components/PreviewLink';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination, Autoplay } from 'swiper/modules';
 import 'swiper/css';

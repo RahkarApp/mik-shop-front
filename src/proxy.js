@@ -1,5 +1,5 @@
 /**
- * Middleware — تشخیص Tenant از subdomain، query و cookie
+ * Proxy — تشخیص Tenant از subdomain، query و cookie
  *
  * اولویت:
  * 1. ?tenant= در URL
@@ -13,7 +13,7 @@ import { TENANT_HEADER, TENANT_COOKIE } from '@/constants/config';
 import { resolveTenantId, buildTenantCookie } from '@/utils/tenant';
 import { isDemo } from '@/services/api';
 
-export function middleware(request) {
+export function proxy(request) {
   const { nextUrl } = request;
   const hostname = request.headers.get('host') || '';
 
@@ -23,14 +23,27 @@ export function middleware(request) {
   // Cookie قبلی
   const cookieTenant = request.cookies.get(TENANT_COOKIE)?.value;
 
-  if (!isDemo) return NextResponse.next();
+  // Never trust a caller-supplied demo header. Preview is determined only by the URL.
+  const preview=nextUrl.pathname==='/demo'||nextUrl.pathname.startsWith('/demo/');
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.delete('x-store-demo-preview');
+  if (preview) requestHeaders.set('x-store-demo-preview','1');
+  if (preview && (nextUrl.pathname.startsWith('/demo/api/') || nextUrl.pathname.startsWith('/demo/_next/'))) {
+    return new Response('Not found', {status:404});
+  }
+  if (preview && (nextUrl.pathname.startsWith('/demo/api/') || nextUrl.pathname.startsWith('/demo/_next/'))) {
+    return new Response('Not found', {status:404});
+  }
+  if (preview && (nextUrl.pathname.startsWith('/demo/api/') || nextUrl.pathname.startsWith('/demo/_next/'))) {
+    return new Response('Not found', {status:404});
+  }
+  if (!isDemo && !preview) return NextResponse.next({request:{headers:requestHeaders}});
   const tenantId = resolveTenantId({
     explicit: queryTenant || cookieTenant,
     hostname,
   });
 
   // هدر برای Server Components
-  const requestHeaders = new Headers(request.headers);
   requestHeaders.set(TENANT_HEADER, tenantId);
 
   const response = NextResponse.next({

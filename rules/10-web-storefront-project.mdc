@@ -5,11 +5,11 @@ alwaysApply: true
 
 # قانون ۲ از ۳ — معماری و رفتار اختصاصی Shapsaz Web Storefront
 
-> همراه `AGENTS.md` قبل از هر تغییر خوانده شود. این فایل نقشه مسیر داده و قابلیت‌ها را نیز دارد تا قانون دیگری لازم نباشد. قرارداد API در `docs/BACKEND_CONNECTION_GUIDE_FA.md` است؛ وضعیت Backend را از آن بخوان و Endpoint جدید اختراع نکن.
+> همراه `AGENTS.md` قبل از هر تغییر خوانده شود. این فایل نقشه مسیر داده و قابلیت‌ها را نیز دارد تا قانون دیگری لازم نباشد. قرارداد API در `بخش API رسمی در AGENTS.md` است؛ وضعیت Backend را از آن بخوان و Endpoint جدید اختراع نکن.
 
 ## هویت محصول و قالب
 
-- Shapsaz **پوسته فروشگاه آنلاین چندمستأجری** است؛ Backend Shop مطابق سند رسمی `docs/SHOP-API.html` داده‌های فروشگاه را در اختیار پوسته قرار می‌دهد. این مخزن Backoffice، Bot، Telegram Mini App و Monitoring نیست.
+- Shapsaz **پوسته فروشگاه آنلاین چندمستأجری** است؛ Backend Shop مطابق سند رسمی `سند رسمی SHOP-API.html تحویل‌شده توسط تیم بک‌اند` داده‌های فروشگاه را در اختیار پوسته قرار می‌دهد. این مخزن Backoffice، Bot، Telegram Mini App و Monitoring نیست.
 - یک قالب ثابت تصویری (`storefront-v1` / Variant A) داریم؛ Componentهای Header، Footer، Product Card و Section با مدل‌های دیگر بر اساس Backend عوض نمی‌شوند. Config فقط برند، رنگ، اطلاعات Footer، محتوا، SEO و Feature/Page Flags را تأمین می‌کند. ویژگی موجود را صرفاً به دلیل Flag غیرفعال با Layout خالی رها نکن؛ Empty/Unavailable باید درست مدیریت شود.
 - `SiteConfigContext` منبع تنظیمات فروشگاه Real است؛ `src/constants/config.js` جایگزین Config واقعی Backend نیست. هیچ نام، لوگو، آدرس، شبکه اجتماعی، favicon یا رنگ فروشگاه آزمایشی را در حالت Real ثابت نکن.
 
@@ -73,3 +73,11 @@ Demo صریح → mockApi/data محلی؛ هرگز fallback خودکار Real
 
 - برای هر تغییر، مسیر داده و Consumerهای قابلیت را ببین. `npm run check`، تست Cart/Quote/Tenant و در صورت امکان Build/Browser اجرا شود.
 - Backend را ویرایش نکن. ایراد آن را با نام فایل، Route، Method و اصلاح موردنیاز در سند Backend ثبت کن. هر آزمونِ انجام‌نشده صریح اعلام شود.
+
+## Demo و نظافت مخزن
+- فقط سه فایل راهنما/قانون وجود دارند: `AGENTS.md` و دو فایل `.mdc` در `rules/`. فایل گزارش یا Rule موازی نساز.
+- `NEXT_PUBLIC_DATA_MODE=demo` حالت Demo **کل برنامه** را فعال می‌کند؛ همان داده Mock موجود، بدون تغییر مکانیزم. `/demo` ورودی مشاهده همان فروشگاه است. در `real`، فقط `/demo` و زیرمسیرهای آن Mock مستقل و ایزوله دارند؛ بقیه صفحات Real-only هستند.
+- برای تغییرات مربوط به Demo حتماً Open/Refresh، navigation، محصول/تنوع، cart و checkout را بررسی کن؛ هیچ اطلاعات Mock وارد Real نشود.
+- README، اسناد تکراری و assetهای استفاده‌نشده در خروجی نهایی نباشند؛ ولی env نمونه، تست‌ها، قوانین، کد Bot بله و assetهای مصرف‌شده حذف نشوند.
+
+- `/demo` حتی با `NEXT_PUBLIC_DATA_MODE=real` مستقل از backend و فقط از Mock استفاده می‌کند؛ زیرمسیرها و سبد پیش‌نمایش از Real جدا هستند. `NEXT_PUBLIC_DATA_MODE=demo` همچنان کل برنامه را Demo می‌کند.

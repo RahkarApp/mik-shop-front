@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import Image from 'next/image';
 import { Plus, Minus, Trash2 } from 'lucide-react';

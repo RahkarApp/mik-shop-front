@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import PreviewLink from '@/components/PreviewLink';
 
 /**
  * Footer — فوتر اصلی فروشگاه (Config-Driven)
@@ -122,15 +123,15 @@ export default function Footer({ variant = "a" }) {
               <span className="absolute -bottom-2 right-0 w-8 h-1 bg-primary rounded-full" />
             </h3>
             <ul className="flex flex-col gap-3 text-sm">
-              <li><a href="/about" className="hover:text-primary transition-colors">درباره ما</a></li>
-              <li><a href="/contact" className="hover:text-primary transition-colors">تماس با ما</a></li>
+              <li><PreviewLink href="/about" className="hover:text-primary transition-colors">درباره ما</PreviewLink></li>
+              <li><PreviewLink href="/contact" className="hover:text-primary transition-colors">تماس با ما</PreviewLink></li>
               {config?.pages?.blog && (
-                <li><a href="/blog" className="hover:text-primary transition-colors">بلاگ</a></li>
+                <li><PreviewLink href="/blog" className="hover:text-primary transition-colors">بلاگ</PreviewLink></li>
               )}
               {config?.pages?.returnPolicy && (
-                <li><a href="/return-policy" className="hover:text-primary transition-colors">سیاست بازگشت کالا</a></li>
+                <li><PreviewLink href="/return-policy" className="hover:text-primary transition-colors">سیاست بازگشت کالا</PreviewLink></li>
               )}
-              <li><a href="/faq" className="hover:text-primary transition-colors">سوالات متداول</a></li>
+              <li><PreviewLink href="/faq" className="hover:text-primary transition-colors">سوالات متداول</PreviewLink></li>
             </ul>
           </div>
 

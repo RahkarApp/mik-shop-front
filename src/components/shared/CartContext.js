@@ -1,8 +1,9 @@
-"use client";
+'use client';
 
 import React, { useState, useReducer, createContext, useContext, useEffect } from 'react';
 import { useSiteConfig } from '@/hooks/useSiteConfig';
 import {cartItemKey, sanitizeCart, cartEstimate} from '@/utils/cart';
+import {isDemoRuntime} from '@/utils/demoRoute';
 
 const CartContext = createContext();
 
@@ -50,13 +51,13 @@ export const CartProvider = ({ children }) => {
   useEffect(() => {
     if (loading || !tenantId) return;
     try {
-      const value = JSON.parse(localStorage.getItem(`shopsaz-cart:${tenantId}`) || '[]');
+      const value = JSON.parse(localStorage.getItem(`shopsaz-cart:${isDemoRuntime()?"demo":"real"}:${tenantId}`) || '[]');
       dispatch({type:'RESTORE',payload:sanitizeCart(value)});
     } catch { dispatch({type:'RESTORE',payload:[]}); }
     setReadyTenant(tenantId);
   }, [tenantId, loading]);
   useEffect(() => {
-    if (readyTenant === tenantId && tenantId) localStorage.setItem(`shopsaz-cart:${tenantId}`, JSON.stringify(state));
+    if (readyTenant === tenantId && tenantId) localStorage.setItem(`shopsaz-cart:${isDemoRuntime()?"demo":"real"}:${tenantId}`, JSON.stringify(state));
   }, [state, readyTenant, tenantId]);
 
   const cartItemCount = state.reduce((count, item) => count + item.quantity, 0);

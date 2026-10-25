@@ -5,7 +5,7 @@
  * فقط اگر pages.blog و features.blog فعال باشند
  */
 
-import Link from 'next/link';
+import Link from '@/components/PreviewLink';
 import { useSiteConfig } from '@/hooks/useSiteConfig';
 import { useBlogPosts } from '@/hooks/useBlogPosts';
 

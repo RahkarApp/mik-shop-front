@@ -1,5 +1,5 @@
 
-import Link from "next/link";
+import Link from "@/components/PreviewLink";
 import { Home, List, ShoppingCart, Search, User } from "lucide-react";
 import { usePathname } from "next/navigation";
 

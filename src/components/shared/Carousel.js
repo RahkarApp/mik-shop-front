@@ -1,5 +1,5 @@
+'use client';
 
-"use client";
 import Card from "./Cart";
 
 import { Swiper, SwiperSlide } from "swiper/react";

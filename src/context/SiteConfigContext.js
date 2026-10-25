@@ -8,12 +8,14 @@
  */
 
 import { createContext, useCallback, useEffect, useMemo, useState } from 'react';
+import {usePathname} from 'next/navigation';
+import {isDemoPath} from '@/utils/demoRoute';
 import {
   getSiteConfig,
 } from '@/services/siteConfigService';
 import { applyThemeStyles, getThemeModeClasses } from '@/utils/theme';
 import { buildTenantCookie } from '@/utils/tenant';
-import { isDemo } from '@/services/api';
+import {isDemoRuntime, demoHref} from '@/utils/demoRoute';
 import { DEFAULT_TENANT_ID } from '@/constants/config';
 
 // مقدار اولیه Context — قبل از لود Config
@@ -31,6 +33,8 @@ export const SiteConfigContext = createContext({
  * SiteConfigProvider — بارگذاری Config و اعمال Theme
  */
 export function SiteConfigProvider({ children, initialTenantId }) {
+  const pathname=usePathname();
+  const preview=isDemoPath(pathname);
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -59,17 +63,17 @@ export function SiteConfigProvider({ children, initialTenantId }) {
     const id = initialTenantId;
     loadConfig(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialTenantId]);
+  }, [initialTenantId, preview]);
 
   // تغییر Tenant — شبیه‌سازی ورود به فروشگاه دیگر
   const handleSwitchTenant = useCallback(
     async (newTenantId) => {
       // ذخیره در Cookie برای Middleware درخواست‌های بعدی
-      if (!isDemo) return;
+      if (!isDemoRuntime()) return;
       if (typeof document !== 'undefined') {
         document.cookie = buildTenantCookie(newTenantId);
       }
-      window.location.assign(`/?tenant=${encodeURIComponent(newTenantId)}`);
+      window.location.assign(demoHref(`/?tenant=${encodeURIComponent(newTenantId)}`));
     },
     [loadConfig]
   );

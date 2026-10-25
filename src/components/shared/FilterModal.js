@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import {demoHref} from '@/utils/demoRoute';
 import { useState, useEffect } from "react";
 import {useRouter,usePathname,useSearchParams} from "next/navigation";
 import { X, ChevronDown, Check } from "lucide-react";
@@ -7,7 +8,7 @@ import {useCategories} from "@/hooks/useCategories";
 // داده‌های تستی با 5 سطح تودرتو
 export default function FilterModal({ isOpen, onClose }) {
   const router=useRouter(),pathname=usePathname(),params=useSearchParams();
-  const apply=()=>{const p=new URLSearchParams(params.toString());if(selectedCategory)p.set('category',selectedCategory);else p.delete('category');if(showAvailableOnly)p.set('availableOnly','true');else p.delete('availableOnly');if(priceRange[1]<10000000)p.set('maxPrice',String(priceRange[1]));else p.delete('maxPrice');p.delete('page');router.push(`${pathname}?${p}`);onClose()};
+  const apply=()=>{const p=new URLSearchParams(params.toString());if(selectedCategory)p.set('category',selectedCategory);else p.delete('category');if(showAvailableOnly)p.set('availableOnly','true');else p.delete('availableOnly');if(priceRange[1]<10000000)p.set('maxPrice',String(priceRange[1]));else p.delete('maxPrice');p.delete('page');router.push(demoHref(`${pathname}?${p}`));onClose()};
   const {categories:CATEGORIES=[]}=useCategories();
   const [showAvailableOnly, setShowAvailableOnly] = useState(false);
   const [priceRange, setPriceRange] = useState([0, 10000000]);

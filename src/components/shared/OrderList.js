@@ -1,5 +1,5 @@
 'use client';
-import Link from 'next/link';
+import Link from '@/components/PreviewLink';
 import {useSiteConfig} from '@/hooks/useSiteConfig';
 import {formatMoney} from '@/utils/format';
 

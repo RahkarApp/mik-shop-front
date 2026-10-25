@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import {demoHref} from '@/utils/demoRoute';
 import { useState } from "react";
 import {useRouter,usePathname,useSearchParams} from "next/navigation";
 import { ArrowDownNarrowWide, Funnel } from "lucide-react";
@@ -17,7 +18,7 @@ const SORT_OPTIONS = [
 
 export default function FilterSortBar() {
   const router=useRouter(),pathname=usePathname(),searchParams=useSearchParams();
-  const changeSort=(value)=>{setSelectedSort(value);const p=new URLSearchParams(searchParams.toString());p.set('sort',value);p.delete('page');router.push(`${pathname}?${p}`)};
+  const changeSort=(value)=>{setSelectedSort(value);const p=new URLSearchParams(searchParams.toString());p.set('sort',value);p.delete('page');router.push(demoHref(`${pathname}?${p}`))};
 
 
   const [showAvailableOnly, setShowAvailableOnly] = useState(false);

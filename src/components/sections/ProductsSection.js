@@ -1,4 +1,5 @@
 'use client';
+import PreviewLink from '@/components/PreviewLink';
 
 /**
  * ProductsSection — محصولات صفحه اصلی (variant کارت از Config)
@@ -39,9 +40,9 @@ export default function ProductsSection() {
         <h2 className="text-xl md:text-2xl font-bold text-gray-800 border-r-4 border-primary pr-3 rounded-sm">
           محصولات ویژه
         </h2>
-        <a href="/search-result" className="text-primary text-sm font-medium hover:underline">
+        <PreviewLink href="/search-result" className="text-primary text-sm font-medium hover:underline">
           مشاهده همه
-        </a>
+        </PreviewLink>
       </div>
       <div className={gridClass}>
         {products.map((product) => (

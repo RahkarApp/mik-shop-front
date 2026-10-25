@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import {demoHref} from '@/utils/demoRoute';
 
 /**
  * Header — هدر اصلی فروشگاه (Config-Driven)
@@ -8,7 +9,7 @@
  */
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
+import Link from "@/components/PreviewLink";
 import { useRouter } from "next/navigation";
 import { Search, User, ShoppingCart, Heart, Wallet } from "lucide-react";
 import SearchModal from "../shared/SearchModal";
@@ -49,7 +50,7 @@ export default function Header({ variant = "a" }) {
     e.preventDefault();
     const q = desktopSearch.trim();
     if (!q) return;
-    router.push(`/search-result?q=${encodeURIComponent(q)}`);
+    router.push(demoHref(`/search-result?q=${encodeURIComponent(q)}`));
   };
 
   // استایل variant B — لوگو وسط‌چین، بدون سرچ دسکتاپ

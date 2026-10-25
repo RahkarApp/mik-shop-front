@@ -31,4 +31,4 @@ alwaysApply: false
 1. Diff سورس، Importها، Routeها، Contract، Config، Adapter و مصرف‌کنندگان حذف‌شده را بررسی کن.
 2. `npm run check`، تست Cart/Checkout/Contract و در صورت نصب Dependency `npm run build` و مرورگر واقعی.
 3. Demo و Real را جدا بسنج؛ شکست Real نباید به Mock یا Order موفق تبدیل شود.
-4. تغییرات و نتیجه واقعی تست‌ها، آزمون‌های انجام‌نشده و وابستگی Backend را در `docs/PROJECT_HISTORY_FA.md` ثبت کن. تست Node برابر Build/Production نیست.
+4. تغییرات و نتیجه واقعی تست‌ها، آزمون‌های انجام‌نشده و وابستگی Backend را در `AGENTS.md` ثبت کن. تست Node برابر Build/Production نیست.

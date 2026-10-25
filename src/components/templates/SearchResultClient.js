@@ -1,4 +1,5 @@
 'use client';
+import {demoHref} from '@/utils/demoRoute';
 
 /**
  * SearchResultClient — نتایج جستجو Config-Driven
@@ -19,7 +20,7 @@ export default function SearchResultClient() {
   const router=useRouter();
   const q = searchParams.get('q')?.trim() || '';
   const chosenCategory=searchParams.get('category')||'';
-  const setCategory=(value)=>{const p=new URLSearchParams(searchParams.toString());if(value)p.set('category',value);else p.delete('category');p.delete('page');router.push(`/search-result?${p}`)};
+  const setCategory=(value)=>{const p=new URLSearchParams(searchParams.toString());if(value)p.set('category',value);else p.delete('category');p.delete('page');router.push(demoHref(`/search-result?${p}`))};
 
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
 
@@ -78,7 +79,7 @@ export default function SearchResultClient() {
               )}
             </div>
           )}
-          {!loading&&!error&&products.length>=50&&<button className="mx-4 my-3 px-4 py-2 border rounded-lg" onClick={()=>{const params=new URLSearchParams(searchParams.toString());params.set('page',String(Number(params.get('page')||1)+1));router.push(`/search-result?${params}`)}}>صفحه بعد</button>}
+          {!loading&&!error&&products.length>=50&&<button className="mx-4 my-3 px-4 py-2 border rounded-lg" onClick={()=>{const params=new URLSearchParams(searchParams.toString());params.set('page',String(Number(params.get('page')||1)+1));router.push(demoHref(`/search-result?${params}`))}}>صفحه بعد</button>}
         </div>
       </div>
     </main>

@@ -1,4 +1,5 @@
 'use client';
+import {demoHref} from '@/utils/demoRoute';
 
 /**
  * ProductCardA — کارت کلاسیک
@@ -6,7 +7,7 @@
  */
 
 import { motion } from 'framer-motion';
-import Link from 'next/link';
+import Link from '@/components/PreviewLink';
 import {useRouter} from 'next/navigation';
 import {useState} from 'react';
 import {useShopActions} from '@/hooks/useShopActions';
@@ -26,7 +27,7 @@ export default function ProductCardA({ product }) {
   const addToCart = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if(product.requiresVariantSelection || product.features?.length){router.push(`/${product.id}`);return;}
+    if(product.requiresVariantSelection || product.features?.length){router.push(demoHref(`/${product.id}`));return;}
     setError('');
     const fresh=await validateStockBeforeAdd(product.id,1);
     if(!fresh.valid){setError(fresh.reason);return;}

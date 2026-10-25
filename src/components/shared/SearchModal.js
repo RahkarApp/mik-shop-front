@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import {demoHref} from '@/utils/demoRoute';
 
 import { useState, useEffect } from "react";
 import { Search, X } from "lucide-react";
@@ -27,7 +28,7 @@ export default function SearchModal({ isOpen, onClose }) {
         e.preventDefault();
         const q = searchQuery.trim();
         if (!q) return;
-        router.push(`/search-result?q=${encodeURIComponent(q)}`);
+        router.push(demoHref(`/search-result?q=${encodeURIComponent(q)}`));
         if (typeof onClose === 'function') onClose();
     };
 

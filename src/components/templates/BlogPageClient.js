@@ -4,7 +4,7 @@
  * BlogPageClient — لیست بلاگ Config-Driven
  */
 
-import Link from 'next/link';
+import Link from '@/components/PreviewLink';
 import PageGuard from '@/components/shared/PageGuard';
 import { useBlogPosts } from '@/hooks/useBlogPosts';
 import { useSiteConfig } from '@/hooks/useSiteConfig';

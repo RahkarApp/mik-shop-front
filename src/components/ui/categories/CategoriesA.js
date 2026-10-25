@@ -4,7 +4,7 @@
  * CategoriesA — دسته‌بندی دایره‌ای (استایل کلاسیک)
  */
 
-import Link from 'next/link';
+import Link from '@/components/PreviewLink';
 import Image from 'next/image';
 
 export default function CategoriesA({ categories }) {

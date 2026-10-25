@@ -5,7 +5,7 @@
  * اگر page در Config غیرفعال باشد، پیام مناسب نشان می‌دهد
  */
 
-import Link from 'next/link';
+import Link from '@/components/PreviewLink';
 import { useSiteConfig } from '@/hooks/useSiteConfig';
 
 export default function PageGuard({ pageKey, children }) {

@@ -4,7 +4,7 @@
  * CartA — سبد دو ستونه با خلاصه سفارش sticky
  */
 
-import Link from 'next/link';
+import Link from '@/components/PreviewLink';
 import { useCart } from '@/components/shared/CartContext';
 import CartItemA from './CartItemA';
 import { ShoppingCart, ArrowRight, Wallet } from 'lucide-react';

@@ -1,11 +1,13 @@
-"use client";
+'use client';
+import {isDemoRuntime} from '@/utils/demoRoute';
+
 
 import React, { useState, useRef, useEffect } from "react";
 import {useShopActions} from '@/hooks/useShopActions';
 import { useSiteConfig } from "@/hooks/useSiteConfig";
 import {formatMoney} from '@/utils/format';
 import { useCart } from "@/components/shared/CartContext";
-import Link from "next/link";
+import Link from "@/components/PreviewLink";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     MapPin,
@@ -101,7 +103,7 @@ export default function CheckoutClient() {
       const items=itemsForCheckout();
       if(items.some(x=>!x.variantId))throw new Error('شناسه واقعی تنوع محصول از سرور موجود نیست');
       const fingerprint=JSON.stringify(items);
-      const storageKey=`shop-checkout:${window.location.hostname}`;
+      const storageKey=`shop-checkout:${isDemoRuntime()?"demo":"real"}:${window.location.hostname}`;
       let existing=null;
       try{existing=JSON.parse(sessionStorage.getItem(storageKey)||'null')}catch{}
       if(!existing){existing={fingerprint,key:crypto.randomUUID(),checkoutId:null};sessionStorage.setItem(storageKey,JSON.stringify(existing));}
@@ -197,7 +199,7 @@ export default function CheckoutClient() {
       try{
         const payload={checkoutId:checkout.checkoutId,quoteId:quote.quoteId,paymentMethod:'online'};
         const fingerprint=JSON.stringify(payload);
-        const intentKey=`shop-order-intent:${window.location.hostname}`;
+        const intentKey=`shop-order-intent:${isDemoRuntime()?"demo":"real"}:${window.location.hostname}`;
         let saved=null;try{saved=JSON.parse(sessionStorage.getItem(intentKey)||'null')}catch{}
         if(saved?.fingerprint!==fingerprint)saved={fingerprint,key:crypto.randomUUID(),orderId:null};
         idempotencyRef.current=saved;
@@ -208,9 +210,9 @@ export default function CheckoutClient() {
         const id=order?.orderId;
         if(!id)throw new Error('شناسه سفارش از سرور دریافت نشد');
         idempotencyRef.current.orderId=id;
-        sessionStorage.setItem(`shop-order-intent:${window.location.hostname}`,JSON.stringify(idempotencyRef.current));
+        sessionStorage.setItem(`shop-order-intent:${isDemoRuntime()?"demo":"real"}:${window.location.hostname}`,JSON.stringify(idempotencyRef.current));
         setOrderId(id);dispatch({type:'CLEAR_CART'});setOrderComplete(true);
-        sessionStorage.removeItem(`shop-checkout:${window.location.hostname}`);
+        sessionStorage.removeItem(`shop-checkout:${isDemoRuntime()?"demo":"real"}:${window.location.hostname}`);
         if(order.paymentUrl&&(!order.paymentExpiresAt||Date.parse(order.paymentExpiresAt)>Date.now())){
           const link=new URL(order.paymentUrl);
           if(link.protocol==='https:')window.location.assign(link.href);

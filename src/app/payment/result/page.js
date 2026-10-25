@@ -1,5 +1,5 @@
 'use client';
-import Link from 'next/link';
+import Link from '@/components/PreviewLink';
 import {Suspense} from 'react';
 import {useSearchParams} from 'next/navigation';
 import {useOrders} from '@/hooks/useOrders';

@@ -5,6 +5,9 @@
  * Browser images still render normally at their original responsive dimensions.
  */
 const nextConfig = {
+  async rewrites() {
+    return {afterFiles: [{source: '/demo/:path*', destination: '/:path*'}]};
+  },
   images: {unoptimized: true},
 };
 export default nextConfig;
