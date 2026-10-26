@@ -1,5 +1,5 @@
 'use client';
-import {demoHref} from '@/utils/demoRoute';
+import {demoHref, isDemoPath} from '@/utils/demoRoute';
 import { useState, useEffect } from "react";
 import { ChevronDown, Check } from "lucide-react";
 
@@ -11,7 +11,7 @@ function toPersianDigits(value) {
 
 // دریافت دسته‌بندی‌ها از فایل داده تستی مرکزی
 import {useCategories} from '@/hooks/useCategories';
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname, useParams } from "next/navigation";
 
 
 
@@ -23,9 +23,14 @@ export default function FilterSidebar() {
   const [persianPriceRange, setPersianPriceRange] = useState(["۰", toPersianDigits(10000000)]); // متغیر جدید برای اعداد فارسی
   const [openCategories, setOpenCategories] = useState({});
   const searchParams = useSearchParams();
+  const pathname=usePathname();
+  const routeParams=useParams();
+  const supportsFilters=process.env.NEXT_PUBLIC_DATA_MODE==='demo'||isDemoPath(pathname);
   const router = useRouter();
-  const selectedCategory = searchParams.get("category") || null;
+  const selectedCategory = searchParams.get("category") || routeParams.category || null;
   const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
+  useEffect(()=>{setShowAvailableOnly(searchParams.get('availableOnly')==='true');setPriceRange([0,Number(searchParams.get('maxPrice')??10000000)]);},[searchParams]);
+  const applyFilter=(name,value)=>{const params=new URLSearchParams(searchParams.toString());if(value)params.set(name,String(value));else params.delete(name);params.delete('page');router.push(demoHref(`${pathname}?${params}`));};
 
   // به‌روزرسانی اعداد فارسی هنگام تغییر priceRange
   useEffect(() => {
@@ -76,6 +81,7 @@ export default function FilterSidebar() {
   const toggleSubcategory = (categoryId) => {
     // تغییر پارامتر category در URL و رفرش صفحه سرچ ریزالت
     const params = new URLSearchParams(searchParams.toString());
+    params.delete('page');
     if (categoryId === selectedCategory) {
       params.delete("category");
     } else {
@@ -156,13 +162,13 @@ export default function FilterSidebar() {
         </div>
 
         {/* کالاهای موجود */}
-        <div className="mb-6">
+        {supportsFilters&&<div className="mb-6">
           <label className="flex items-center gap-3 cursor-pointer">
             <div className="relative">
               <input
                 type="checkbox"
                 checked={showAvailableOnly}
-                onChange={() => setShowAvailableOnly(!showAvailableOnly)}
+                onChange={() => {setShowAvailableOnly(!showAvailableOnly);applyFilter('availableOnly',!showAvailableOnly?'true':'');}}
                 className="sr-only"
               />
               <div
@@ -179,10 +185,10 @@ export default function FilterSidebar() {
             </div>
             <span className="text-base text-gray-700 font-medium">کالاهای موجود</span>
           </label>
-        </div>
+        </div>}
 
         {/* محدوده قیمت */}
-        <div>
+        {supportsFilters&&<div>
           <h3 className="text-base font-semibold text-gray-800 mb-3">محدوده قیمت</h3>
           <input
             type="range"
@@ -196,7 +202,8 @@ export default function FilterSidebar() {
             <span>{persianPriceRange[0]} تومان</span>
             <span>{persianPriceRange[1]} تومان</span>
           </div>
-        </div>
+          <button type="button" onClick={()=>applyFilter('maxPrice',priceRange[1]<10000000?priceRange[1]:'')} className="mt-3 px-4 py-2 border rounded-lg text-sm">اعمال قیمت</button>
+        </div>}
       </div>
     </>
   );

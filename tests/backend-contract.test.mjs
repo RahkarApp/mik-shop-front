@@ -49,6 +49,7 @@ test('known list and invoice envelopes are adapted without inventing totals',()=
  const order=adaptOrder({uid:'i1',customerUID:'c1',items:{p1:[{proUID:17,qty:2,price:5}]},status:[{status:1}]});
  assert.equal(order.id,'i1');assert.equal(order.items[0].quantity,2);
  assert.equal(order.summary.total,null);
+ assert.equal(adaptOrder({orderId:'new-order',totals:{total:450000}}).summary.total,450000);
  assert.throws(()=>adaptResponse('/categories','GET',{status:false,message:'failed'}),/failed/);
 });
 
@@ -67,4 +68,11 @@ test('published shopId and branding fields map to the single existing storefront
 test('maxPrice is not a fabricated crossed-out original price and unknown stock stays null',()=>{
  const item=adaptProduct({uid:'a',name:'کالا',minPrice:120,maxPrice:180,inventory:null,inventoryAvailable:false});
  assert.equal(item.originalPrice,null);assert.equal(item.stock,null);
+});
+
+test('malformed catalog responses are errors rather than a fabricated empty catalog',()=>{
+ for(const path of ['/products','/categories']){
+  assert.throws(()=>adaptResponse(path,'GET',{status:true,data:{}}),{code:'INVALID_BACKEND_RESPONSE'});
+  assert.equal(adaptResponse(path,'GET',{status:true,data:{items:[],nextCursor:null}}).items.length,0);
+ }
 });

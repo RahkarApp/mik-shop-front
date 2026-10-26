@@ -71,7 +71,8 @@ export function adaptResponse(path, method, response) {
   if (pathname === '/config') return adaptStore(payload);
   if (pathname === '/products' && method === 'GET') {
     const entries = Array.isArray(payload) ? payload : payload?.items;
-    return Array.isArray(entries) ? {items:entries.map(adaptProduct),nextCursor:payload?.nextCursor??null} : payload;
+    if(!Array.isArray(entries))throw Object.assign(new Error('فهرست محصولات دریافت‌شده از فروشگاه معتبر نیست'),{code:'INVALID_BACKEND_RESPONSE'});
+    return {items:entries.map(adaptProduct),nextCursor:payload?.nextCursor??null};
   }
   if (/^\/products\/[^/]+$/.test(pathname) && method === 'GET') return adaptProduct(payload);
   if (/^\/products\/[^/]+\/inventory$/.test(pathname) && method === 'GET') {
@@ -81,7 +82,11 @@ export function adaptResponse(path, method, response) {
       variants:p.variants,
       variantMissingId:p.variants.length>0 && p.variants.some(v=>!v.proUID)} : null;
   }
-  if (pathname === '/categories' && method === 'GET') {const entries=Array.isArray(payload)?payload:payload?.items; return {items:(entries||[]).map(c=>({...c,id:String(c.id??c.categoryId??c.uid),name:c.name})),nextCursor:payload?.nextCursor??null};}
+  if (pathname === '/categories' && method === 'GET') {
+    const entries=Array.isArray(payload)?payload:payload?.items;
+    if(!Array.isArray(entries))throw Object.assign(new Error('فهرست دسته‌بندی‌های دریافت‌شده از فروشگاه معتبر نیست'),{code:'INVALID_BACKEND_RESPONSE'});
+    return {items:entries.map(c=>({...c,id:String(c.id??c.categoryId??c.uid),name:c.name})),nextCursor:payload?.nextCursor??null};
+  }
   if (pathname === '/me' && payload?.Profile) return {...payload.Profile, phone:payload.Profile.mobile, addresses:payload.address};
   if (pathname === '/me' && payload) return {...payload, id:payload.customerId??payload.id, addresses:payload.addresses||[]};
   if (pathname === '/addresses' && method === 'GET') return payload?.items||[];
@@ -98,5 +103,5 @@ export function adaptOrder(order) {
   return {...order, id: order.id || order.orderId || order.uid, items, date:order.date || order.createdAt,
     status: Array.isArray(order.status) ? order.status.at(-1)?.status : order.status,
     processingStatus:order.processingStatus, paymentStatus:order.paymentStatus,deliveryStatus:order.deliveryStatus,
-    summary:order.summary || {total:null}};
+    summary:order.summary || order.totals || {total:null}};
 }

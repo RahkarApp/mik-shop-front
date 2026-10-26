@@ -13,8 +13,10 @@ import { formatPrice, formatMoney } from '@/utils/format';
 import {useSiteConfig} from '@/hooks/useSiteConfig';
 
 export default function CartA() {
-  const { cart, cartTotal, dispatch } = useCart();
+  const { cart, cartTotal, dispatch, ready, storageError } = useCart();
   const {config} = useSiteConfig();
+
+  if (!ready) return <p role="status" className="text-center py-20 text-gray-500">در حال دریافت سبد خرید...</p>;
 
   if (cart.length === 0) {
     return (
@@ -33,6 +35,7 @@ export default function CartA() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
       <div className="lg:col-span-8 flex flex-col gap-4">
+        {storageError && <p role="alert" className="text-amber-700 text-sm">{storageError}</p>}
         <h1 className="text-xl font-bold flex items-center gap-2">
           <ShoppingCart className="w-6 h-6" />
           سبد خرید ({formatPrice(cart.length)} کالا)

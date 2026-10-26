@@ -12,6 +12,7 @@ import {useState} from 'react';
 
 export default function ProductFeatureBar({ productName, productId }) {
   const [message,setMessage]=useState('');
+  const [busy,setBusy]=useState(false);
   const {addWishlist}=useShopActions();
   const { isWishlistEnabled, isReviewsEnabled } = useFeatures();
   const { isFeatureEnabled, tenantId } = useSiteConfig();
@@ -24,21 +25,24 @@ export default function ProductFeatureBar({ productName, productId }) {
   if (!hasAny) return null;
 
   const handleShare = async () => {
+    try {
     if (navigator.share) {
       await navigator.share({ title: productName, url: window.location.href });
     } else {
-      navigator.clipboard?.writeText(window.location.href);
-      alert('لینک کپی شد');
+      if(!navigator.clipboard)throw new Error('کپی خودکار لینک در این مرورگر در دسترس نیست');
+      await navigator.clipboard.writeText(window.location.href);
+      setMessage('لینک محصول کپی شد');
     }
+    } catch(error) {if(error.name!=='AbortError')setMessage(error.message||'اشتراک‌گذاری انجام نشد');}
   };
 
   return (
     <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-100">
       {message&&<p role="status" className="text-xs w-full">{message}</p>}
       {isWishlistEnabled && (
-        <button type="button" onClick={async()=>{try{await addWishlist(productId);setMessage('به علاقه‌مندی‌ها افزوده شد')}catch(e){setMessage(e.message)}}} className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:border-primary hover:text-primary transition-colors">
+        <button type="button" disabled={busy} onClick={async()=>{if(busy)return;setBusy(true);try{await addWishlist(productId);setMessage('به علاقه‌مندی‌ها افزوده شد')}catch(e){setMessage(e.message)}finally{setBusy(false)}}} className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:border-primary hover:text-primary transition-colors disabled:opacity-50">
           <Heart className="w-3.5 h-3.5" />
-          علاقه‌مندی
+          {busy?'در حال افزودن...':'علاقه‌مندی'}
         </button>
       )}
       {showShare && (

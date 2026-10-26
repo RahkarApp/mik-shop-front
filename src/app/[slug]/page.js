@@ -48,7 +48,7 @@ export default async function ProductDetailPage({ params }) {
           <div className="rounded-xl overflow-hidden border border-gray-100 md:w-1/2 lg:w-5/12">
             <ImageSlider images={product.images || [product.image]} />
           </div>
-          <ProductDetailsClient product={product} />
+          <ProductDetailsClient key={product.id} product={product} />
         </div>
       </div>
       <ReviewsPanel productId={slug}/>

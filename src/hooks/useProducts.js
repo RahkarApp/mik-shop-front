@@ -1,53 +1,32 @@
 'use client';
 
-/**
- * useProducts — دریافت محصولات از Service Layer
- * قیمت و موجودی همیشه از Micro Server می‌آیند
- */
+import {useEffect, useState} from 'react';
+import {usePathname} from 'next/navigation';
+import {useSiteConfig} from './useSiteConfig';
+import {getProducts} from '@/services/productService';
+import {isDemoPath} from '@/utils/demoRoute';
 
-import { useEffect, useState } from 'react';
-import { useSiteConfig } from './useSiteConfig';
-import { getProducts } from '@/services/productService';
-
-/**
- * @param {Object} options — query, category, limit
- */
-export function useProducts(options = { limit: 8 }) {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const { tenantId, loading: configLoading } = useSiteConfig();
-
-  const limit = options.limit ?? 8;
-  const query = options.query ?? '';
-  const category = options.category ?? '';
-  const sort = options.sort ?? 'newest';
-  const minPrice = options.minPrice ?? '';
-  const maxPrice = options.maxPrice ?? '';
-  const availableOnly = options.availableOnly ?? '';
-  const page = options.page ?? 1;
+export function useProducts(options = {}) {
+  const {tenantId, loading:configLoading, error:configError} = useSiteConfig();
+  const pathname = usePathname();
+  const {limit=8, query='', category='', sort='newest', minPrice='', maxPrice='', availableOnly='', page=1} = options;
+  const key = JSON.stringify([tenantId, isDemoPath(pathname), limit, query, category, sort, minPrice, maxPrice, availableOnly, page]);
+  const [result, setResult] = useState({key:null, products:[], error:null, loading:true, hasNextPage:false});
 
   useEffect(() => {
     if (configLoading || !tenantId) return;
-    let cancelled = false;
-    setError(null);
-    setLoading(true);
-
-    getProducts({ query, category, limit, sort, minPrice, maxPrice, availableOnly, page }, tenantId)
-      .then((data) => {
-        if (!cancelled) setProducts(Array.isArray(data) ? data : data?.items || []);
+    let active = true;
+    setResult({key, products:[], error:null, loading:true, hasNextPage:false});
+    getProducts({limit, query, category, sort, minPrice, maxPrice, availableOnly, page}, tenantId)
+      .then(data => {
+        if (!active) return;
+        const products = Array.isArray(data) ? data : data?.items || [];
+        setResult({key, products, loading:false, error:null, hasNextPage:Array.isArray(data) ? products.length >= limit : Boolean(data?.nextCursor)});
       })
-      .catch((err) => {
-        if (!cancelled) setError(err.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      .catch(err => {if (active) setResult({key, products:[], loading:false, error:err.message, hasNextPage:false});});
+    return () => {active = false;};
+  }, [key, configLoading]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [limit, query, category, sort, minPrice, maxPrice, availableOnly, page, tenantId, configLoading]);
-
-  return { products, loading, error };
+  if (configError) return {products:[], loading:false, error:configError, hasNextPage:false};
+  return result.key === key && !configLoading ? result : {products:[], loading:true, error:null, hasNextPage:false};
 }

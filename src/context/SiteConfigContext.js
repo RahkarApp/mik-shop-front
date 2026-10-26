@@ -32,7 +32,12 @@ export const SiteConfigContext = createContext({
 /**
  * SiteConfigProvider — بارگذاری Config و اعمال Theme
  */
-export function SiteConfigProvider({ children, initialTenantId }) {
+export function SiteConfigProvider({children, initialTenantId}) {
+  const pathname = usePathname();
+  return <StoreConfigSession key={`${initialTenantId}:${isDemoPath(pathname)}`} initialTenantId={initialTenantId}>{children}</StoreConfigSession>;
+}
+
+function StoreConfigSession({ children, initialTenantId }) {
   const pathname=usePathname();
   const preview=isDemoPath(pathname);
   const [config, setConfig] = useState(null);

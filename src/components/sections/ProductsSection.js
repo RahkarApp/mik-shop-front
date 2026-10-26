@@ -44,6 +44,7 @@ export default function ProductsSection() {
           مشاهده همه
         </PreviewLink>
       </div>
+      {products.length === 0 && <p className="text-center text-gray-500 py-8">هنوز محصولی در فروشگاه ثبت نشده است.</p>}
       <div className={gridClass}>
         {products.map((product) => (
           <ProductCardRenderer key={product.id} product={product} />

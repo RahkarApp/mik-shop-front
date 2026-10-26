@@ -10,12 +10,15 @@ import FilterSortBar from '@/components/shared/FilterSortBar';
 import FilterSidebar from '@/components/shared/FilterSidebar';
 import { useProducts } from '@/hooks/useProducts';
 import {useSearchParams} from 'next/navigation';
+import Link from '@/components/PreviewLink';
 import { useComponentVariant } from '@/hooks/useComponentVariant';
 import { PRODUCT_CARD_C } from '@/constants/config';
 
 export default function CategoryPageClient({ categoryId, categoryName }) {
   const params=useSearchParams();
-  const { products, loading, error } = useProducts({ category: categoryId, limit: 50,sort:params.get('sort')||'newest',maxPrice:params.get('maxPrice')||'',availableOnly:params.get('availableOnly')||'' });
+  const page=Math.max(1,Number(params.get('page'))||1);
+  const { products, loading, error, hasNextPage } = useProducts({ category: categoryId, page, limit: 50,sort:params.get('sort')||'newest',minPrice:params.get('minPrice')||'',maxPrice:params.get('maxPrice')||'',availableOnly:params.get('availableOnly')||'' });
+  const pageHref=number=>{const next=new URLSearchParams(params.toString());next.set('page',String(number));return `/category/${encodeURIComponent(categoryId)}?${next}`;};
   const cardVariant = useComponentVariant('productCard');
 
   const gridClass =
@@ -58,6 +61,10 @@ export default function CategoryPageClient({ categoryId, categoryName }) {
               )}
             </div>
           )}
+          {!loading&&!error&&<nav aria-label="صفحه‌های محصولات" className="flex gap-3 mx-4 my-3">
+            {page>1&&<Link href={pageHref(page-1)} className="px-4 py-2 border rounded-lg">صفحه قبل</Link>}
+            {hasNextPage&&<Link href={pageHref(page+1)} className="px-4 py-2 border rounded-lg">صفحه بعد</Link>}
+          </nav>}
         </div>
       </div>
     </main>

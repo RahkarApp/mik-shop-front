@@ -58,3 +58,15 @@ test('real environment /demo/checkout can complete simulated reservation and ord
  assert.equal(response.order.paymentStatus,'pending');
  assert.equal(response.order.paymentUrl,null);
 });
+
+test('demo reviews reach the review route, and demo OTP/logout follow the UI contract',async()=>{
+ const api=makeDemoApi('real','/demo/0001');
+ assert.equal((await api('/products/0001/reviews',{tenantId:'reviews-store'})).length,0);
+ await api('/products/0001/reviews',{method:'POST',tenantId:'reviews-store',body:{rating:5,text:'demo review'}});
+ assert.equal((await api('/products/0001/reviews',{tenantId:'reviews-store'})).length,1);
+ const challenge=await api('/auth/otp/request',{method:'POST',body:{phone:'09000000000'}});
+ assert.ok(challenge.challengeId);
+ const login=await api('/auth/otp/verify',{method:'POST',body:{challengeId:challenge.challengeId,code:'00000'}});
+ assert.ok(login.accessToken);
+ assert.equal((await api('/auth/logout',{method:'POST'})).loggedOut,true);
+});

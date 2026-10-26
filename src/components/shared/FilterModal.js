@@ -1,20 +1,23 @@
 'use client';
-import {demoHref} from '@/utils/demoRoute';
+import {demoHref, isDemoPath} from '@/utils/demoRoute';
 import { useState, useEffect } from "react";
-import {useRouter,usePathname,useSearchParams} from "next/navigation";
+import {useRouter,usePathname,useSearchParams,useParams} from "next/navigation";
 import { X, ChevronDown, Check } from "lucide-react";
 import {useCategories} from "@/hooks/useCategories";
 
 // داده‌های تستی با 5 سطح تودرتو
 export default function FilterModal({ isOpen, onClose }) {
   const router=useRouter(),pathname=usePathname(),params=useSearchParams();
-  const apply=()=>{const p=new URLSearchParams(params.toString());if(selectedCategory)p.set('category',selectedCategory);else p.delete('category');if(showAvailableOnly)p.set('availableOnly','true');else p.delete('availableOnly');if(priceRange[1]<10000000)p.set('maxPrice',String(priceRange[1]));else p.delete('maxPrice');p.delete('page');router.push(demoHref(`${pathname}?${p}`));onClose()};
+  const routeParams=useParams();
+  const supportsFilters=process.env.NEXT_PUBLIC_DATA_MODE==='demo'||isDemoPath(pathname);
+  const apply=()=>{const p=new URLSearchParams(params.toString());if(selectedCategory)p.set('category',selectedCategory);else p.delete('category');if(supportsFilters){if(showAvailableOnly)p.set('availableOnly','true');else p.delete('availableOnly');if(priceRange[1]<10000000)p.set('maxPrice',String(priceRange[1]));else p.delete('maxPrice');}p.delete('page');router.push(demoHref(`/search-result?${p}`));onClose()};
   const {categories:CATEGORIES=[]}=useCategories();
   const [showAvailableOnly, setShowAvailableOnly] = useState(false);
   const [priceRange, setPriceRange] = useState([0, 10000000]);
   const [openCategories, setOpenCategories] = useState({});
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
+  useEffect(()=>{if(isOpen){setSelectedCategory(params.get('category')||routeParams.category||null);setShowAvailableOnly(params.get('availableOnly')==='true');setPriceRange([0,Number(params.get('maxPrice')??10000000)]);}},[isOpen,params,routeParams.category]);
 
   // تابع برای پیدا کردن مسیر والدین یک دسته‌بندی
   const findParentCategories = (categories, targetId, path = []) => {
@@ -117,8 +120,10 @@ export default function FilterModal({ isOpen, onClose }) {
     );
   };
 
+  if(!isOpen)return null;
   return (
     <div
+      role="dialog" aria-modal="true" aria-label="فیلتر محصولات"
       className={`fixed left-0 right-0 bottom-[60px] top-0 z-50 flex justify-center items-end md:hidden transition-all duration-500 ease-in-out ${
         isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
       }`}
@@ -147,10 +152,13 @@ export default function FilterModal({ isOpen, onClose }) {
           </button>
         </div>
 
-
-
-        {/* کالاهای موجود */}
         <div className="mb-6">
+          <button type="button" className="w-full text-right font-bold py-3" onClick={()=>setIsCategoriesOpen(!isCategoriesOpen)}>دسته‌بندی‌ها</button>
+          {isCategoriesOpen&&CATEGORIES.map(category=>renderCategory(category))}
+        </div>
+        {!supportsFilters&&<p className="text-sm text-gray-500">در حال حاضر فیلتر دسته‌بندی در دسترس است.</p>}
+        {/* کالاهای موجود */}
+        {supportsFilters&&<div className="mb-6">
           <label className="flex items-center gap-3 cursor-pointer">
             <div className="relative">
               <input
@@ -173,10 +181,10 @@ export default function FilterModal({ isOpen, onClose }) {
             </div>
             <span className="text-base text-gray-700 font-medium">کالاهای موجود</span>
           </label>
-        </div>
+        </div>}
 
         {/* محدوده قیمت */}
-        <div>
+        {supportsFilters&&<div>
           <h3 className="text-base font-semibold text-gray-800 mb-3">محدوده قیمت</h3>
           <input
             type="range"
@@ -192,7 +200,7 @@ export default function FilterModal({ isOpen, onClose }) {
             <span>{priceRange[0].toLocaleString()} تومان</span>
             <span>{priceRange[1].toLocaleString()} تومان</span>
           </div>
-        </div>
+        </div>}
         <button type="button" onClick={apply} className="bg-primary text-white rounded-xl p-3 w-full mt-5">اعمال فیلتر</button>
       </div>
     </div>

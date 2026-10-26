@@ -9,6 +9,11 @@ export function toPersianDigits(value) {
   return String(value).replace(/[0-9]/g, (d) => map[d]);
 }
 
+export function normalizeDigits(value) {
+  return String(value ?? '').replace(/[۰-۹٠-٩]/g, digit =>
+    String(digit.charCodeAt(0) - (digit >= '۰' ? 0x06f0 : 0x0660)));
+}
+
 /** فرمت قیمت با جداکننده هزارگان */
 export function formatPrice(price) {
   if (price === undefined || price === null || price === '' || !Number.isFinite(Number(price))) return '—';

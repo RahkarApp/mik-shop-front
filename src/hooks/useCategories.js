@@ -17,6 +17,8 @@ export function useCategories() {
   useEffect(() => {
     if (configLoading || !tenantId) return;
     let cancelled = false;
+    setLoading(true);
+    setCategories([]);
     setError(null);
 
     getCategories(tenantId)

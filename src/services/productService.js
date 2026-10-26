@@ -1,21 +1,26 @@
 import {api} from './api';
 const enc=value=>encodeURIComponent(String(value));
 export async function getProducts(options={}, tenantId){
- const {page=1,limit=20,query='',category='',...rest}=options;
+ const {page=1,limit=20,query='',category='',sort='',minPrice='',maxPrice='',availableOnly=''}=options;
  const params=new URLSearchParams({limit:String(Math.min(50,Math.max(1,Number(limit)||20))),...(query?{query}:{}),...(category?{category}:{})});
+ for(const [key,value] of Object.entries({sort,minPrice,maxPrice,availableOnly,page}))if(value!==''&&value!=null)params.set(key,String(value));
+ const requestedPage=Math.min(Math.max(1,Number(page)||1),100);
  let cursor=null,results={items:[],nextCursor:null};
  // Cursor-backed API: derive a requested page by advancing cursors. No page index sent to backend.
- for(let index=1;index<=Math.min(Math.max(1,Number(page)||1),100);index++){
+ for(let index=1;index<=requestedPage;index++){
   const cursorQuery=new URLSearchParams(params);
   if(cursor)cursorQuery.set('after',cursor);
   results=await api(`/products?${cursorQuery}`,{tenantId});
+  if(Array.isArray(results))return results;
   cursor=results?.nextCursor;
-  if(!cursor)break;
+  if(!cursor){if(index<requestedPage)return {items:[],nextCursor:null};break;}
  }
  return results;
 }
 export async function getProductById(id,tenantId,host){
- const base=await api(`/products/${enc(id)}`,{tenantId,host});
+ let base;
+ try {base=await api(`/products/${enc(id)}`,{tenantId,host});}
+ catch(error){if(error.status===404)return null;throw error;}
  if(!base)return null;
  const variants=[...(base.variants||[])],seen=new Set(variants.map(x=>x.proUID));
  let after=base.variantsNextCursor;
@@ -30,15 +35,16 @@ export async function getProductById(id,tenantId,host){
  for(const v of variants)for(const a of v.properties||[]){
   if(!a.name)continue;
   if(!map.has(a.name))map.set(a.name,new Map());
-  map.get(a.name).set(String(a.value),{value:a.value,available:v.stock!=null&&Number(v.stock)>0,colorCode:a.code||null});
+  const previous=map.get(a.name).get(String(a.value));
+  map.get(a.name).set(String(a.value),{value:String(a.value),available:Boolean(previous?.available||v.stock!=null&&Number(v.stock)>0),colorCode:a.code||null});
  }
  return {...base,variants,variantsComplete:true,variantsNextCursor:null,
-   features:[...map].map(([name,opts])=>({name,options:[...opts.values()]}))};
+   features:variants.length ? [...map].map(([name,opts])=>({name,options:[...opts.values()]})) : base.features || []};
 }
 export async function getProductInventory(id,tenantId){
  const p=await getProductById(id,tenantId);
- return p ? {productId:p.id,price:p.price,stock:p.stock,variants:p.variants,
-  requiresVariantSelection:p.variants.length>0||p.features.length>0,variantMissingId:p.variants.some(v=>!v.proUID)}:null;
+ return p ? {...p,productId:p.id,
+  requiresVariantSelection:p.requiresVariantSelection||p.variants.length>0||p.features.length>0,variantMissingId:p.variants.some(v=>!v.proUID)}:null;
 }
 export const getBanners=tenantId=>api('/banners',{tenantId});
 export async function getCategories(tenantId,host){

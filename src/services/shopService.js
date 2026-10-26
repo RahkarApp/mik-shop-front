@@ -11,7 +11,9 @@ export async function createAddress(data,tenantId,token) {
  const entry={addressId:crypto.randomUUID(),title:data.title||'نشانی',fullAddress:data.fullAddress||data.text||'',isDefault:!profile.addresses?.length};
  if(!entry.fullAddress)throw new Error('نشانی کامل الزامی است');
  const updated=await api('/me',{method:'PATCH',body:{expectedRevision:profile.revision,addresses:[...(profile.addresses||[]),entry]},tenantId,token,idempotencyKey:crypto.randomUUID()});
- return updated.addresses.find(a=>a.addressId===entry.addressId)||entry;
+ const saved=updated?.addresses?.find(a=>a.addressId===entry.addressId);
+ if(!saved)throw new Error('نشانی ثبت‌شده در پاسخ فروشگاه دریافت نشد؛ پیش از تلاش دوباره، نشانی‌های حساب را بررسی کنید');
+ return saved;
 }
 export async function removeAddress(id,tenantId,token) {
  const profile=await getProfile(tenantId,token);

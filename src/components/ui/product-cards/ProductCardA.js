@@ -1,5 +1,4 @@
 'use client';
-import {demoHref} from '@/utils/demoRoute';
 
 /**
  * ProductCardA — کارت کلاسیک
@@ -8,31 +7,13 @@ import {demoHref} from '@/utils/demoRoute';
 
 import { motion } from 'framer-motion';
 import Link from '@/components/PreviewLink';
-import {useRouter} from 'next/navigation';
-import {useState} from 'react';
-import {useShopActions} from '@/hooks/useShopActions';
 import Image from 'next/image';
-import { ShoppingCart } from 'lucide-react';
-import { useCart } from '@/components/shared/CartContext';
+import ProductCartControls from '@/components/shared/ProductCartControls';
 import { formatPrice, formatMoney } from '@/utils/format';
 import {useSiteConfig} from '@/hooks/useSiteConfig';
 
 export default function ProductCardA({ product }) {
-  const { dispatch } = useCart();
   const {config} = useSiteConfig();
-  const {validateStockBeforeAdd}=useShopActions();
-  const router=useRouter();
-  const [error,setError]=useState('');
-
-  const addToCart = async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if(product.requiresVariantSelection || product.features?.length){router.push(demoHref(`/${product.id}`));return;}
-    setError('');
-    const fresh=await validateStockBeforeAdd(product.id,1);
-    if(!fresh.valid){setError(fresh.reason);return;}
-    dispatch({ type: 'ADD_ITEM', payload: {product:{...product,price:fresh.price}} });
-  };
 
   return (
     <motion.div
@@ -41,7 +22,7 @@ export default function ProductCardA({ product }) {
       whileHover={{ y: -4 }}
       className="group relative bg-white rounded-2xl shadow-sm hover:shadow-xl transition-shadow border border-gray-100 flex flex-col overflow-hidden"
     >
-      <Link href={`/${product.id}`} className="absolute inset-0 z-10" aria-label={product.name} />
+      <Link href={`/${encodeURIComponent(product.id)}`} pendingLabel="در حال باز کردن محصول..." className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-2 focus-visible:outline-primary" aria-label={product.name} />
 
       {product.discount > 0 && (
         <div className="absolute top-3 right-3 z-20 bg-rose-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
@@ -74,15 +55,7 @@ export default function ProductCardA({ product }) {
             )}
             <span className="text-lg font-black">{product.price==null ? "قیمت نامشخص" : formatMoney(product.price, config?.currency)}</span>
           </div>
-          {error&&<p role="alert" className="text-rose-600 text-xs">{error}</p>}
-          <button
-            type="button"
-            onClick={addToCart}
-            className="relative z-20 w-full bg-gray-900 hover:bg-primary text-white flex justify-center items-center gap-2 text-sm py-2.5 rounded-xl font-medium transition-colors"
-          >
-            <ShoppingCart className="w-4 h-4" />
-            افزودن به سبد
-          </button>
+          <ProductCartControls product={product}/>
         </div>
       </div>
     </motion.div>

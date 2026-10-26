@@ -25,7 +25,7 @@ export default function SearchResultClient() {
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
 
 
-  const { products, loading, error } = useProducts({
+  const { products, loading, error, hasNextPage } = useProducts({
     query: q,
     category: chosenCategory,
     sort:searchParams.get('sort')||'newest',
@@ -79,7 +79,10 @@ export default function SearchResultClient() {
               )}
             </div>
           )}
-          {!loading&&!error&&products.length>=50&&<button className="mx-4 my-3 px-4 py-2 border rounded-lg" onClick={()=>{const params=new URLSearchParams(searchParams.toString());params.set('page',String(Number(params.get('page')||1)+1));router.push(demoHref(`/search-result?${params}`))}}>صفحه بعد</button>}
+          {!loading&&!error&&<nav aria-label="صفحه‌های محصولات" className="flex gap-3 mx-4 my-3">
+            {Number(searchParams.get('page')||1)>1&&<button className="px-4 py-2 border rounded-lg" onClick={()=>{const params=new URLSearchParams(searchParams.toString());params.set('page',String(Math.max(1,Number(params.get('page')||1)-1)));router.push(demoHref(`/search-result?${params}`))}}>صفحه قبل</button>}
+            {hasNextPage&&<button className="px-4 py-2 border rounded-lg" onClick={()=>{const params=new URLSearchParams(searchParams.toString());params.set('page',String(Number(params.get('page')||1)+1));router.push(demoHref(`/search-result?${params}`))}}>صفحه بعد</button>}
+          </nav>}
         </div>
       </div>
     </main>

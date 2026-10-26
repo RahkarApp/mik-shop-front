@@ -29,7 +29,8 @@ export default function HomePageBuilder() {
   }
 
   // ترتیب بخش‌ها متعلق به قالب ثابت نسخه ۱ است؛ فروشگاه فقط محتوا را تغییر می‌دهد.
-  const homeSections = ['hero', 'categories', 'products', ...(config?.features?.blog ? ['blog'] : [])];
+  // اسلایدر خانه فعلاً به درخواست محصول نمایش داده نمی‌شود.
+  const homeSections = ['categories', 'products', ...(config?.features?.blog === true ? ['blog'] : [])];
 
   return (
     <main className="flex flex-col w-full items-center justify-start gap-12 pb-12">

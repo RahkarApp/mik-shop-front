@@ -67,7 +67,7 @@ async function demo(path, { method, body, tenantId, idempotencyKey }) {
   if (method === 'GET' && pathname.startsWith('/products/') && pathname.endsWith('/inventory')) {
     const p=await m.fetchProductInventory(decodeURIComponent(pathname.split('/')[2]));return p&&{...p,variants:[{proUID:`demo-${p.productId}`,price:p.price,stock:p.stock,properties:[]}],requiresVariantSelection:true};
   }
-  if (method === 'GET' && pathname.startsWith('/products/')) {const item=await m.fetchProductById(decodeURIComponent(pathname.split('/')[2]));return item&&{...item,variants:[{proUID:`demo-${item.id}`,price:item.price,stock:item.stock,properties:[]}],variantsComplete:true,variantsNextCursor:null};}
+  if (method === 'GET' && /^\/products\/[^/]+$/.test(pathname)) {const item=await m.fetchProductById(decodeURIComponent(pathname.split('/')[2]));return item&&{...item,variants:[{proUID:`demo-${item.id}`,price:item.price,stock:item.stock,properties:[]}],variantsComplete:true,variantsNextCursor:null};}
   if (method === 'GET' && pathname === '/categories') return m.fetchCategories();
   if (method === 'GET' && pathname === '/banners') return m.fetchBanners();
   if (method === 'GET' && pathname === '/blog') return m.fetchBlogPosts();
@@ -126,7 +126,8 @@ async function demo(path, { method, body, tenantId, idempotencyKey }) {
   }
   if (method === 'POST' && pathname === '/coupons/validate') throw new Error('کد تخفیف در داده نمونه تعریف نشده است');
   if (method === 'POST' && pathname === '/auth/otp/request') return { challengeId: 'demo-otp', expiresIn: 120 };
-  if (method === 'POST' && pathname === '/auth/otp/verify') { if (body.code !== '123456') throw new Error('کد آزمایشی 123456 است');return { accessToken:'demo-session',user:demoState(tenantId).profile }; }
+  if (method === 'POST' && pathname === '/auth/otp/verify') { if (!/^\d{5}$/.test(body.code)) throw new Error('کد آزمایشی باید پنج رقم باشد');return { accessToken:'demo-session',user:demoState(tenantId).profile }; }
+  if (method === 'POST' && pathname === '/auth/logout') return {loggedOut:true};
   throw new Error(`این قابلیت در Demo شبیه‌سازی نشده است: ${method} ${pathname}`);
 }
 const demos = new Map();

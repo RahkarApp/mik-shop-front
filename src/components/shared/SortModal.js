@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { X } from "lucide-react";
 
 // داده‌های تست برای گزینه‌های مرتب‌سازی
@@ -7,11 +7,9 @@ const SORT_OPTIONS = [
   { id: 1, name: "جدیدترین", value: "newest" },
   { id: 2, name: "ارزان‌ترین", value: "cheapest" },
   { id: 3, name: "گران‌ترین", value: "most_expensive" },
-  { id: 4, name: "محبوب‌ترین", value: "most_popular" },
 ];
 
-export default function SortModal({ isOpen, onClose, onSelect }) {
-  const [selectedSort, setSelectedSort] = useState(SORT_OPTIONS[0].value);
+export default function SortModal({ isOpen, onClose, onSelect, selectedValue='newest' }) {
 
   // بستن مدال تو صفحه‌های بزرگ‌تر (md و بالاتر)
   useEffect(() => {
@@ -24,8 +22,10 @@ export default function SortModal({ isOpen, onClose, onSelect }) {
     return () => window.removeEventListener("resize", handleResize);
   }, [isOpen, onClose]);
 
+  if(!isOpen)return null;
   return (
     <div
+      role="dialog" aria-modal="true" aria-label="مرتب‌سازی محصولات"
       className={`fixed inset-0 z-50 flex justify-center items-end md:hidden transition-all duration-500 ease-in-out ${
         isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
       }`}
@@ -56,21 +56,20 @@ export default function SortModal({ isOpen, onClose, onSelect }) {
         {/* گزینه‌ها */}
         <div className="space-y-3">
           {SORT_OPTIONS.map((option) => (
-            <div
+            <button type="button"
               key={option.id}
-              className={`py-3 px-4 text-base cursor-pointer rounded-lg transition-all duration-200 ${
-                selectedSort === option.value
+              className={`w-full text-right py-3 px-4 text-base cursor-pointer rounded-lg transition-all duration-200 ${
+                selectedValue === option.value
                   ? "bg-gray-200 font-semibold"
                   : "text-gray-700 font-semibold "
               }`}
               onClick={() => {
-                setSelectedSort(option.value);
                 onSelect?.(option.value);
                 onClose();
               }}
             >
               {option.name}
-            </div>
+            </button>
           ))}
         </div>
       </div>

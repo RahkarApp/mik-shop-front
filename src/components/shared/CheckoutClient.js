@@ -5,7 +5,8 @@ import {isDemoRuntime} from '@/utils/demoRoute';
 import React, { useState, useRef, useEffect } from "react";
 import {useShopActions} from '@/hooks/useShopActions';
 import { useSiteConfig } from "@/hooks/useSiteConfig";
-import {formatMoney} from '@/utils/format';
+import {formatMoney,normalizeDigits} from '@/utils/format';
+import {purchaseStorageScope} from '@/utils/cart';
 import { useCart } from "@/components/shared/CartContext";
 import Link from "@/components/PreviewLink";
 import { motion, AnimatePresence } from "framer-motion";
@@ -37,26 +38,31 @@ const STEPS = [
 ];
 
 export default function CheckoutClient() {
-    const { cart, cartTotal, dispatch } = useCart();
-    const { config } = useSiteConfig();
-    const {quoteCheckout,placeOrder,getShopMethods,startCheckout,getCheckout,updateCheckoutItems,createAddress,getAddresses,getProfile}=useShopActions();
+    const { cart, cartTotal, dispatch, ready } = useCart();
+    const { config, tenantId, loading:configLoading } = useSiteConfig();
+    const {quoteCheckout,placeOrder,getShopMethods,startCheckout,getCheckout,updateCheckoutItems,createAddress,getProfile}=useShopActions();
     const [quote, setQuote] = useState(null);
     const [checkout, setCheckout] = useState(null);
     const [shippingMethods,setShippingMethods]=useState([]);
     const [shippingMethodId,setShippingMethodId]=useState('');
     const [addressId,setAddressId]=useState('');
     const [savedAddresses,setSavedAddresses]=useState([]);
+    const [methodsLoading,setMethodsLoading]=useState(true);
+    const [needsLogin,setNeedsLogin]=useState(false);
     const startIntent=useRef(null);
     const quoteIntent=useRef(null);
     useEffect(()=>{
+      if(configLoading||!tenantId)return;
       let active=true;
-      Promise.all([getShopMethods(),getAddresses()]).then(([methods,addresses])=>{
+      setMethodsLoading(true);
+      Promise.all([getShopMethods(),getProfile()]).then(([methods,profile])=>{
         if(!active)return;
         setShippingMethods((methods?.shippingMethods||[]).filter(m=>m.active!==false));
-        setSavedAddresses(addresses||[]);
-      }).catch(e=>{if(active)setSubmitError(e.message)});
+        setSavedAddresses(profile?.addresses||[]);
+        setFormData(previous=>({...previous,name:profile?.name||'',phone:profile?.phone||''}));
+      }).catch(e=>{if(active){setSubmitError(e.message);setNeedsLogin(e.status===401)}}).finally(()=>{if(active)setMethodsLoading(false)});
       return ()=>{active=false};
-    },[]);
+    },[tenantId,configLoading]);
 
     const [orderId, setOrderId] = useState(null);
     const [submitError,setSubmitError]=useState('');
@@ -74,10 +80,16 @@ export default function CheckoutClient() {
     });
     const [isProcessing, setIsProcessing] = useState(false);
     const [orderComplete, setOrderComplete] = useState(false);
+    const operationLock = useRef(false);
+    const mounted = useRef(true);
+    useEffect(()=>{mounted.current=true;return()=>{mounted.current=false}},[]);
     // Address or cart changes invalidate the visible price. Only a fresh server quote can be submitted.
-    useEffect(() => {setQuote(null);}, [cart, shippingMethodId, addressId, formData.province,formData.city, formData.address, formData.postalCode]);
+    const cartFingerprint=JSON.stringify(cart.map(item=>[item.cartItemId,item.proUID,item.quantity]));
+    const quoteInputKey=JSON.stringify([cartFingerprint,shippingMethodId,addressId,formData.province,formData.city,formData.address,formData.postalCode]);
+    useEffect(() => {setQuote(current=>current?.inputKey===quoteInputKey?current:null);}, [quoteInputKey]);
 
     // اگر سبد خرید خالی است (و سفارش تکمیل نشده)
+    if (!ready) return <p role="status" className="py-20 text-center">در حال دریافت سبد خرید...</p>;
     if (cart.length === 0 && !orderComplete) {
         if (typeof window !== 'undefined') {
             // ریدایرکت یا پیام
@@ -95,7 +107,7 @@ export default function CheckoutClient() {
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
+        setFormData((prev) => ({ ...prev, [name]: name==='postalCode'?normalizeDigits(value):value }));
     };
 
     const itemsForCheckout=()=>cart.map(x=>({productId:String(x.id),variantId:String(x.proUID||''),quantity:String(x.quantity)}));
@@ -103,7 +115,7 @@ export default function CheckoutClient() {
       const items=itemsForCheckout();
       if(items.some(x=>!x.variantId))throw new Error('شناسه واقعی تنوع محصول از سرور موجود نیست');
       const fingerprint=JSON.stringify(items);
-      const storageKey=`shop-checkout:${isDemoRuntime()?"demo":"real"}:${window.location.hostname}`;
+      const storageKey=`shop-checkout:${purchaseStorageScope(window.location.hostname,tenantId,isDemoRuntime())}`;
       let existing=null;
       try{existing=JSON.parse(sessionStorage.getItem(storageKey)||'null')}catch{}
       if(!existing){existing={fingerprint,key:crypto.randomUUID(),checkoutId:null};sessionStorage.setItem(storageKey,JSON.stringify(existing));}
@@ -159,7 +171,9 @@ export default function CheckoutClient() {
       if(!shipping)throw new Error('روش ارسال معتبر را انتخاب کنید');
       if(shipping.requiresAddress===false)return null;
       if(addressId)return addressId;
-      const text=[formData.province,formData.city,formData.address].filter(Boolean).join('، ');
+      if(!formData.address.trim())throw new Error('آدرس کامل تحویل را وارد یا از نشانی‌های ذخیره‌شده انتخاب کنید');
+      if(formData.postalCode&&!/^\d{10}$/.test(formData.postalCode))throw new Error('کد پستی باید ده رقم باشد');
+      const text=[formData.province,formData.city,formData.address,formData.postalCode?`کد پستی: ${formData.postalCode}`:''].filter(Boolean).join('، ');
       if(!text.trim())throw new Error('آدرس تحویل را وارد یا انتخاب کنید');
       const created=await createAddress({title:'آدرس تحویل',fullAddress:text,postalCode:formData.postalCode});
       const id=created.addressId||created.id;
@@ -169,23 +183,28 @@ export default function CheckoutClient() {
       return id;
     }
     async function fetchQuote() {
-      const active=await ensureActiveCheckout();
       const addr=await getValidAddress();
-      const fingerprint=JSON.stringify({checkoutId:active.checkoutId,shippingMethodId,addressId:addr});
+      const active=await ensureActiveCheckout();
+      const fingerprint=JSON.stringify({checkoutId:active.checkoutId,revision:active.revision,shippingMethodId,addressId:addr});
       if(quoteIntent.current?.fingerprint!==fingerprint)quoteIntent.current={fingerprint,key:crypto.randomUUID()};
       const result=await quoteCheckout(active.checkoutId,shippingMethodId,addr,quoteIntent.current.key);
-      if(!result?.quoteId||!result.totals||!Number.isSafeInteger(result.totals.total)||!result.orderSubmissionAvailable)throw new Error('استعلام معتبر یا امکان ثبت سفارش دریافت نشد');
+      if(!result?.quoteId||!result.totals||!Number.isSafeInteger(result.totals.total)||result.orderSubmissionAvailable!==true||!Number.isFinite(Date.parse(result.expiresAt)))throw new Error('استعلام معتبر یا امکان ثبت سفارش دریافت نشد');
       const allowed=result.paymentMethods?.some(x=>x.id==='online'&&x.enabled===true);
       if(!allowed)throw new Error('پرداخت آنلاین این فروشگاه فعال نیست');
-      setQuote({...result,...result.totals,shipping:result.totals.shippingAmount,discount:result.totals.discountAmount,tax:result.totals.taxAmount});
+      const inputKey=JSON.stringify([cartFingerprint,shippingMethodId,addr||'',formData.province,formData.city,formData.address,formData.postalCode]);
+      setQuote({...result,...result.totals,shipping:result.totals.shippingAmount,discount:result.totals.discountAmount,tax:result.totals.taxAmount,inputKey});
       return result;
     }
     const nextStep=async()=>{
+      if(operationLock.current)return;
+      operationLock.current=true;
+      try {
       if(currentStep===1){
         setIsProcessing(true);setSubmitError('');
-        try{await fetchQuote()}catch(e){setSubmitError(e.message);return}finally{setIsProcessing(false)}
+        try{await fetchQuote()}catch(e){setSubmitError(e.message);setNeedsLogin(e.status===401);return}finally{setIsProcessing(false)}
       }
       setCurrentStep(prev=>Math.min(prev+1,STEPS.length));
+      } finally {operationLock.current=false;}
     };
 
     const prevStep = () => {
@@ -193,13 +212,15 @@ export default function CheckoutClient() {
     };
 
     const handlePlaceOrder=async()=>{
-      if(isProcessing||uncertain||orderId||!quote||!checkout)return;
-      if(Date.parse(quote.expiresAt)<=Date.now()){setQuote(null);setSubmitError('اعتبار استعلام پایان یافته است');return;}
+      if(operationLock.current||isProcessing||uncertain||orderId||!quote||!checkout)return;
+      if(!Number.isFinite(Date.parse(quote.expiresAt))||Date.parse(quote.expiresAt)<=Date.now()){setQuote(null);setSubmitError('اعتبار استعلام پایان یافته است؛ به مرحله اطلاعات ارسال برگردید و دوباره استعلام بگیرید');return;}
+      operationLock.current=true;
       setIsProcessing(true);setSubmitError('');let posting=false;
       try{
         const payload={checkoutId:checkout.checkoutId,quoteId:quote.quoteId,paymentMethod:'online'};
         const fingerprint=JSON.stringify(payload);
-        const intentKey=`shop-order-intent:${isDemoRuntime()?"demo":"real"}:${window.location.hostname}`;
+        const purchaseScope=purchaseStorageScope(window.location.hostname,tenantId,isDemoRuntime());
+        const intentKey=`shop-order-intent:${purchaseScope}`;
         let saved=null;try{saved=JSON.parse(sessionStorage.getItem(intentKey)||'null')}catch{}
         if(saved?.fingerprint!==fingerprint)saved={fingerprint,key:crypto.randomUUID(),orderId:null};
         idempotencyRef.current=saved;
@@ -210,15 +231,16 @@ export default function CheckoutClient() {
         const id=order?.orderId;
         if(!id)throw new Error('شناسه سفارش از سرور دریافت نشد');
         idempotencyRef.current.orderId=id;
-        sessionStorage.setItem(`shop-order-intent:${isDemoRuntime()?"demo":"real"}:${window.location.hostname}`,JSON.stringify(idempotencyRef.current));
+        sessionStorage.setItem(intentKey,JSON.stringify(idempotencyRef.current));
+        if(!mounted.current)return;
         setOrderId(id);dispatch({type:'CLEAR_CART'});setOrderComplete(true);
-        sessionStorage.removeItem(`shop-checkout:${isDemoRuntime()?"demo":"real"}:${window.location.hostname}`);
+        sessionStorage.removeItem(`shop-checkout:${purchaseScope}`);
         if(order.paymentUrl&&(!order.paymentExpiresAt||Date.parse(order.paymentExpiresAt)>Date.now())){
           const link=new URL(order.paymentUrl);
           if(link.protocol==='https:')window.location.assign(link.href);
         }
       }catch(e){if(posting&&(!e.status||e.status>=500))setUncertain(true);setSubmitError(e.message||'وضعیت ثبت سفارش نامشخص است؛ سفارش جدید نسازید');}
-      finally{setIsProcessing(false)}
+      finally{setIsProcessing(false);operationLock.current=false}
     };
 
     if (orderComplete) {
@@ -235,7 +257,7 @@ export default function CheckoutClient() {
                 <p className="text-gray-600 mb-8">شماره سفارش: {toPersianDigits(orderId)}</p>
                 <div className="flex gap-4">
                     <Link
-                        href="/orders"
+                        href={`/orders/${encodeURIComponent(orderId)}`}
                         className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition"
                     >
                         پیگیری سفارش
@@ -255,6 +277,8 @@ export default function CheckoutClient() {
         <div className="w-full max-w-6xl mx-auto py-8 px-4 grid grid-cols-1 lg:grid-cols-12 gap-8 relative items-start">
 
             {submitError && <div role="alert" className="col-span-12 text-red-600 p-3 bg-red-50 rounded-xl">{submitError}{uncertain && <p>پاسخ سرور نامشخص است؛ تا بررسی سفارش‌ها یا تماس با فروشگاه، ثبت مجدد غیرفعال است.</p>}</div>}
+            {needsLogin&&<Link href="/login?next=%2Fcheckout" className="col-span-12 text-primary underline">ورود به حساب و ادامه خرید</Link>}
+            {methodsLoading&&<p role="status" className="col-span-12 text-gray-500">در حال دریافت روش‌های ارسال و نشانی‌ها...</p>}
             {/* Steps Progress (Mobile & Desktop) */}
             <div className="col-span-12 mb-4">
                 <div className="flex items-center justify-between relative max-w-3xl mx-auto">
@@ -290,7 +314,7 @@ export default function CheckoutClient() {
 
             {/* Main Form Content */}
             <div className="col-span-12 lg:col-span-8">
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8 min-h-[400px]">
+                <fieldset disabled={isProcessing || methodsLoading} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8 min-h-[400px]">
                     <AnimatePresence mode="wait">
                         {currentStep === 1 && (
                             <motion.div
@@ -319,19 +343,21 @@ export default function CheckoutClient() {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="flex flex-col gap-2">
-                                        <label className="text-sm font-medium text-gray-700">نام و نام خانوادگی <span className="text-red-500">*</span></label>
+                                        <label className="text-sm font-medium text-gray-700">نام حساب کاربری</label>
                                         <input
                                             name="name"
+                                            readOnly
                                             value={formData.name}
                                             onChange={handleInputChange}
                                             className="px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
-                                            placeholder="مثلا: علی محمدی"
+                                            placeholder="نام در حساب کاربری ثبت نشده است"
                                         />
                                     </div>
                                     <div className="flex flex-col gap-2">
-                                        <label className="text-sm font-medium text-gray-700">شماره موبایل <span className="text-red-500">*</span></label>
+                                        <label className="text-sm font-medium text-gray-700">شماره موبایل حساب</label>
                                         <input
                                             name="phone"
+                                            readOnly
                                             type="tel"
                                             value={formData.phone}
                                             onChange={handleInputChange}
@@ -377,6 +403,7 @@ export default function CheckoutClient() {
                                         />
                                     </div>
                                 </div>
+                                <Link href="/profile" className="text-primary text-sm underline">ویرایش اطلاعات حساب و نشانی‌ها</Link>
                             </motion.div>
                         )}
 
@@ -436,20 +463,20 @@ export default function CheckoutClient() {
                                     </div>
                                     <div className="text-sm text-gray-600 space-y-1">
                                         <p>{formData.name} - {toPersianDigits(formData.phone)}</p>
-                                        <p>{formData.province} - {formData.city}</p>
-                                        <p>{formData.address}</p>
+                                        <p>{addressId?(savedAddresses.find(address=>String(address.addressId||address.id)===String(addressId))?.fullAddress||'نشانی انتخاب‌شده'): [formData.province,formData.city,formData.address,formData.postalCode].filter(Boolean).join('، ')}</p>
                                     </div>
                                 </div>
 
                                 <div className="flex flex-col gap-2">
                                     {cart.map(item => (
-                                        <div key={item.id} className="flex items-center gap-3 p-2 bg-white border border-gray-100 rounded-lg">
+                                        <div key={item.cartItemId} className="flex items-center gap-3 p-2 bg-white border border-gray-100 rounded-lg">
                                             <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center shrink-0">
                                                 <img src={item.image} alt="" className="w-full h-full object-contain mix-blend-multiply" />
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-sm font-medium truncate">{item.name}</p>
                                                 <p className="text-xs text-gray-500">{toPersianDigits(item.quantity)} عدد</p>
+                                                {!!Object.keys(item.selectedFeatures||{}).length&&<p className="text-xs text-gray-500">{Object.entries(item.selectedFeatures).map(([name,value])=>`${name}: ${value}`).join('، ')}</p>}
                                             </div>
                                             <div className="text-sm font-bold">
                                                 {item.price == null ? "—" : formatMoney(item.price * item.quantity, config?.currency)} (تقریبی)
@@ -464,7 +491,7 @@ export default function CheckoutClient() {
                     <div className="flex justify-between items-center mt-8 pt-6 border-t border-gray-100">
                         <button
                             onClick={prevStep}
-                            disabled={currentStep === 1}
+                            disabled={currentStep === 1 || isProcessing}
                             className={`flex items-center gap-2 px-6 py-3 rounded-xl transition font-medium ${currentStep === 1 ? 'opacity-0 pointer-events-none' : 'text-gray-600 hover:bg-gray-100'}`}
                         >
                             <ChevronRight size={18} /> مرحله قبل
@@ -473,9 +500,10 @@ export default function CheckoutClient() {
                         {currentStep < 3 ? (
                             <button
                                 onClick={nextStep}
-                                className="flex items-center gap-2 px-8 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition shadow-lg shadow-primary/30 font-bold"
+                                disabled={isProcessing}
+                                className="flex items-center gap-2 px-8 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition shadow-lg shadow-primary/30 font-bold disabled:opacity-60 disabled:cursor-not-allowed"
                             >
-                                مرحله بعد <ChevronLeft size={18} />
+                                {isProcessing ? 'در حال بررسی سبد...' : 'مرحله بعد'} <ChevronLeft size={18} />
                             </button>
                         ) : (
                             <button
@@ -487,7 +515,7 @@ export default function CheckoutClient() {
                             </button>
                         )}
                     </div>
-                </div>
+                </fieldset>
             </div>
 
             {/* Sticky Summary */}
