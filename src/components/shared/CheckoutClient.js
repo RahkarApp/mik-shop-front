@@ -101,7 +101,16 @@ export default function CheckoutClient() {
     const quoteInputKey=JSON.stringify([cartFingerprint,shippingMethodId,effectiveAddressId,formData.province,formData.city,formData.address,formData.postalCode,paymentMethodId]);
     useEffect(() => {setQuote(current=>current?.inputKey===quoteInputKey?current:null);}, [quoteInputKey]);
     useEffect(()=>{setPaymentCheck(null);setQuote(null);},[shippingMethods,paymentMethods]);
-    useEffect(()=>{if(paymentMethodId&&!paymentOptions.some(method=>method.id===paymentMethodId&&method.enabled))setPaymentMethodId('');},[paymentMethodId,paymentCheck,paymentMethods]);
+    useEffect(()=>{
+      const selectedIsAvailable=shippingMethods.some(method=>method.id===shippingMethodId);
+      if(shippingMethodId&&!selectedIsAvailable)setShippingMethodId('');
+      else if(!shippingMethodId&&shippingMethods.length===1)setShippingMethodId(shippingMethods[0].id);
+    },[shippingMethodId,shippingMethods]);
+    useEffect(()=>{
+      const enabledMethods=paymentOptions.filter(method=>method.enabled);
+      if(paymentMethodId&&!enabledMethods.some(method=>method.id===paymentMethodId))setPaymentMethodId('');
+      else if(!paymentMethodId&&enabledMethods.length===1)setPaymentMethodId(enabledMethods[0].id);
+    },[paymentMethodId,paymentCheck,paymentMethods]);
 
     // اگر سبد خرید خالی است (و سفارش تکمیل نشده)
     if (access.status==='checking'||access.status==='redirecting') return <p role="status" className="py-20 text-center">{access.status==='redirecting'?'برای ادامه خرید، به صفحه ورود منتقل می‌شوید...':'در حال بررسی ورود به حساب...'}</p>;
