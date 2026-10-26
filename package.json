@@ -11,7 +11,7 @@
     "check:architecture": "node scripts/check-architecture.mjs",
     "check:icons": "node tests/icons.test.mjs",
     "check": "npm run check:architecture && npm run test:contract",
-    "test:contract": "node --experimental-default-type=module --test tests/*.test.mjs"
+    "test:contract": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "framer-motion": "14.6.0",

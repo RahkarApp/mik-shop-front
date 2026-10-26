@@ -49,7 +49,7 @@ test('invalid wildcard policies fail closed; trusted ingress does not bypass a c
   assert.equal(validateStoreHost('custom.example', { production: true, trustedIngress: true }), 'custom.example');
 });
 
-function setup(overrides = {}, upstreamStatus = 200) {
+function setup(overrides = {}, upstreamStatus = 200, upstreamBody = '{"status":true,"data":{}}') {
   const calls = [];
   const env = { SHOP_BACKEND_ORIGIN: 'https://backend.example', SHOP_ALLOWED_HOSTS: allowedHosts, NODE_ENV: 'production', ...overrides };
   const transport = { request(target, options, respond) {
@@ -60,7 +60,7 @@ function setup(overrides = {}, upstreamStatus = 200) {
       response.statusCode = upstreamStatus;
       response.headers = { location: 'https://evil.example/private' };
       respond(response);
-      response.emit('data', Buffer.from('{"status":true,"data":{}}'));
+      response.emit('data', Buffer.from(upstreamBody));
       response.emit('end');
     };
     return request;
@@ -136,4 +136,16 @@ test('SSR applies the same Host policy before issuing any backend request', asyn
   await api('/config', { host: 'AlPhA.shop.p.mikcore.ir:3300' });
   assert.equal(calls[0].target.origin, 'https://backend.example');
   assert.equal(calls[0].options.headers.Host, 'alpha.shop.p.mikcore.ir');
+});
+
+
+test('HTML and invalid envelopes become explicit transport errors in both proxy and SSR', async () => {
+  for (const body of ['<!doctype html><html>frontend</html>', 'null', '{"status":true}']) {
+    const { request, api, calls } = setup({}, 200, body);
+    const response = await request('alpha.shop.p.mikcore.ir');
+    assert.equal(response.status, 502);
+    assert.equal((await response.json()).code, 'INVALID_BACKEND_RESPONSE');
+    await assert.rejects(api('/config', { host: 'alpha.shop.p.mikcore.ir' }), { status: 502, code: 'INVALID_BACKEND_RESPONSE' });
+    assert.equal(calls.length, 2, 'No hidden retry or alternative tenant');
+  }
 });

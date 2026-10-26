@@ -45,7 +45,14 @@ export async function api(path,{method='GET',body,tenantId,host,token,signal,ide
     const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),15000);
     try{
       const res=browser ? await fetch(url,{method:backendMethod,headers,body:requestBody===undefined?undefined:JSON.stringify(requestBody),signal:signal||controller.signal,cache:'no-store'}) : await serverRequest(url,{method:backendMethod,headers,body:requestBody===undefined?undefined:JSON.stringify(requestBody),signal:signal||controller.signal});
-      const raw=res.status===204?null:await res.json().catch(()=>null);
+      let raw=null;
+      if(res.status!==204){
+        try { raw=await res.json(); } catch { /* Report the transport contract below. */ }
+        if(!raw||typeof raw!=='object'||Array.isArray(raw)||typeof raw.status!=='boolean'||(raw.status===true&&!Object.hasOwn(raw,'data'))){
+          const error=new Error('پاسخ بک‌اند فروشگاه معتبر نیست؛ مقصد SHOP_BACKEND_ORIGIN باید API شاپ باشد');
+          error.status=502;error.code='INVALID_BACKEND_RESPONSE';throw error;
+        }
+      }
       if(!res.ok||raw?.status===false){if(browser&&res.status===401)clearAccessToken();const err=new Error(raw?.message||`خطای API (${res.status})`);err.status=res.status;err.code=raw?.code;throw err;}
       if(path==='/auth/otp/verify'){
         const payload=raw?.data;
@@ -146,7 +153,9 @@ async function serverRequest(target,{method,headers,body,signal}) {
   const req=lib.request(url,{servername:url.hostname,method,headers:{...headers,'Content-Length':Buffer.byteLength(body||'')},signal,timeout:15000},res=>{
    const chunks=[];let size=0;
    res.on('data',chunk=>{size+=chunk.length;if(size>1024*1024){req.destroy(new Error('پاسخ بک‌اند بیش از حد بزرگ است'));return;}chunks.push(chunk);});
+   res.on('aborted',()=>reject(new Error('پاسخ بک‌اند فروشگاه قطع شد')));
+   res.on('error',reject);
    res.on('end',()=>{const raw=Buffer.concat(chunks).toString('utf8');resolve({ok:res.statusCode>=200&&res.statusCode<300,status:res.statusCode,json:async()=>JSON.parse(raw)});});
-  }); req.on('error',reject);req.end(body);
+  }); req.on('timeout',()=>req.destroy(new Error('مهلت اتصال به بک‌اند فروشگاه پایان یافت')));req.on('error',reject);req.end(body);
  });
 }

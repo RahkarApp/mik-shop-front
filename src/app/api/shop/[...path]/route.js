@@ -42,11 +42,20 @@ async function forward(request,{params}){
       const upstreamRequest=library.request(target,{servername:target.hostname,method:request.method,headers:{...headers,...(body?{'Content-Length':Buffer.byteLength(body)}:{})},timeout:15000},response=>{
         const parts=[];let total=0;
         response.on('data',chunk=>{total+=chunk.length;if(total>1024*1024)upstreamRequest.destroy(new Error('Oversize'));else parts.push(chunk)});
+        response.on('aborted',()=>reject(new Error('Backend response interrupted')));
+        response.on('error',reject);
         response.on('end',()=>resolve({status:response.statusCode,body:Buffer.concat(parts).toString('utf8')}));
       });
+      upstreamRequest.on('timeout',()=>upstreamRequest.destroy(new Error('Backend request timed out')));
       upstreamRequest.on('error',reject);upstreamRequest.end(body);
     });
-    return new NextResponse(upstream.body,{status:upstream.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+    if(upstream.status===204)return new NextResponse(null,{status:204,headers:{'Cache-Control':'no-store'}});
+    let payload;
+    try { payload=JSON.parse(upstream.body); } catch { /* Never label an HTML page as JSON. */ }
+    if(!payload||typeof payload!=='object'||Array.isArray(payload)||typeof payload.status!=='boolean'||(payload.status===true&&!Object.hasOwn(payload,'data'))){
+      return NextResponse.json({status:false,code:'INVALID_BACKEND_RESPONSE',message:'پاسخ بک‌اند فروشگاه معتبر نیست؛ مقصد SHOP_BACKEND_ORIGIN باید API شاپ باشد'},{status:502,headers:{'Cache-Control':'no-store'}});
+    }
+    return new NextResponse(JSON.stringify(payload),{status:upstream.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
   } catch {return NextResponse.json({status:false,code:'BACKEND_UNAVAILABLE',message:'ارتباط با سرور فروشگاه برقرار نشد'},{status:502});}
 }
 export async function GET(req,context){return forward(req,context)}
