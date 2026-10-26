@@ -69,6 +69,8 @@ test('shop methods preserve backend labels and zero amounts, and do not enable m
   assert.throws(()=>normalizeCheckoutMethods({...methodsPayload,paymentMethods:[null]}),{code:'INVALID_BACKEND_RESPONSE'});
   assert.throws(()=>normalizeCheckoutMethods({...methodsPayload,paymentMethods:[...methodsPayload.paymentMethods,...methodsPayload.paymentMethods]}),{code:'INVALID_BACKEND_RESPONSE'});
   assert.equal(normalizeCheckoutMethods({...methodsPayload,shippingMethods:[{id:'unknown',name:'نامعلوم'}]}).shippingMethods.length,0);
+  assert.throws(()=>normalizeCheckoutMethods({...methodsPayload,shippingMethods:[{shippingMethodId:'bad',name:'ناقص',amount:null,currency:'TOMAN',active:true,requiresAddress:true}]}),{code:'INVALID_BACKEND_RESPONSE'});
+  assert.throws(()=>normalizeCheckoutMethods({...methodsPayload,paymentMethods:[{id:'online',name:'پرداخت',enabled:'true'}]}),{code:'INVALID_BACKEND_RESPONSE'});
 });
 test('payment must be enabled by the backend and the latest Quote; COD is never invented',()=>{
   const list=[...methodsPayload.paymentMethods,{id:'cod',name:'روش دیگر',enabled:true}];
@@ -111,7 +113,7 @@ test('category tree renders search, accessible parent expansion and no fake arro
   assert.match(markup,/type="search"/);assert.equal((markup.match(/aria-expanded=/g)||[]).length,1);assert.match(markup,/پوشاک/);
 });
 
-function checkoutHarness({revokePayment=false} = {}) {
+function checkoutHarness({revokePayment=false,mismatchShipping=false} = {}) {
   const values=[],effects=[],storage=new Map(),quotes=[],orders=[];let cursor=0,revision=1;
   const methods=normalizeCheckoutMethods(methodsPayload),profile={name:'Customer',phone:'09000000000',addresses:[]};
   const hooks={...React,
@@ -120,8 +122,8 @@ function checkoutHarness({revokePayment=false} = {}) {
     useEffect:(callback,deps)=>{const slot=cursor++,previous=values[slot];if(!previous||deps.some((value,index)=>value!==previous.deps[index])){previous?.cleanup?.();values[slot]={deps};effects.push(()=>{values[slot].cleanup=callback();});}},
   };
   const actions={startCheckout:async()=>({checkout:{checkoutId:'checkout-fixture',revision,status:'ACTIVE'}}),getCheckout:async()=>({checkout:{checkoutId:'checkout-fixture',revision,status:'ACTIVE'}}),
-    quoteCheckout:async(...args)=>{quotes.push(args);revision++;const enabled=!(revokePayment&&quotes.length>1);return {checkoutId:'checkout-fixture',quoteId:'quote-'+revision,revision,currency:'TOMAN',totals:{subtotal:100,shippingAmount:0,discountAmount:0,taxAmount:0,total:100},expiresAt:new Date(Date.now()+600000).toISOString(),paymentMethods:[{id:'online',enabled,...(!enabled?{reason:'PAYMENT_NOT_CONFIGURED'}:{})}],orderSubmissionAvailable:enabled};},
-    placeOrder:async payload=>{orders.push(payload);return {order:{orderId:'checkout-fixture'}};},createAddress:async()=>{throw new Error('Pickup must not create an address');}};
+    quoteCheckout:async(...args)=>{quotes.push(args);revision++;const enabled=!(revokePayment&&quotes.length>1);const shippingAmount=methods.shippingMethods.find(method=>method.id===args[1])?.amount;return {checkoutId:'checkout-fixture',quoteId:'quote-'+revision,revision,currency:'TOMAN',totals:{currency:'TOMAN',subtotal:100,shippingAmount,discountAmount:0,taxAmount:0,total:100+shippingAmount},shippingMethod:{shippingMethodId:mismatchShipping?'another-method':args[1]},expiresAt:new Date(Date.now()+600000).toISOString(),paymentMethods:[{id:'online',enabled,...(!enabled?{reason:'PAYMENT_NOT_CONFIGURED'}:{})}],orderSubmissionAvailable:enabled};},
+    placeOrder:async payload=>{orders.push(payload);return {order:{orderId:'checkout-fixture'}};},createAddress:async payload=>({addressId:'address-fixture',...payload})};
   // The compiled component receives these browser objects through its VM, not the real browser.
   const overrides={'react':hooks,'framer-motion':{motion:{div:'div'},AnimatePresence:props=>props.children},'@/utils/demoRoute':{isDemoRuntime:()=>true},
     '@/hooks/useShopActions':{useShopActions:()=>actions},'@/hooks/useCheckoutAccess':{useCheckoutAccess:()=>({status:'allowed',profile})},
@@ -140,15 +142,20 @@ function elements(node) {return !node||typeof node!=='object'?[]:[node,...React.
 function textContent(node) {return typeof node==='string'?node:!node||typeof node!=='object'?'':React.Children.toArray(node.props?.children).map(textContent).join(' ');}
 test('actual checkout selection invalidates Quote and submits only the explicitly selected server payment',async()=>{
   const fixture=checkoutHarness();fixture.render();let tree=fixture.render();
+  const next=()=>elements(tree).find(node=>node.type==='button'&&(textContent(node).includes('محاسبه مبلغ')||textContent(node).includes('تأیید و ادامه')));
+  assert.equal(next().props.disabled,true);
   const shipping=elements(tree).find(node=>node.type===Choices&&node.props.name==='shipping-method');
-  shipping.props.onChange('pickup');tree=fixture.render();
-  const next=()=>elements(tree).find(node=>node.type==='button'&&textContent(node).includes('مرحله بعد'));
+  shipping.props.onChange('post');tree=fixture.render();
+  const address=elements(tree).find(node=>node.type==='textarea'&&node.props.name==='address');
+  address.props.onChange({target:{name:'address',value:'نشانی آزمایشی'}});tree=fixture.render();
+  assert.equal(next().props.disabled,false);
   await next().props.onClick();tree=fixture.render();assert.equal(fixture.quotes.length,1);assert.equal(fixture.orders.length,0);
+  assert.equal(fixture.quotes[0][1],'post');assert.match(textContent(tree),/۲۳,۱۰۰ تومان/);assert.equal(next().props.disabled,true);
   const payment=elements(tree).find(node=>node.type===Choices&&node.props.name==='payment-method');
   assert.equal(payment.props.options[0].name,'درگاه پرداخت فروشگاه');payment.props.onChange('online');tree=fixture.render();
-  assert.match(textContent(tree),/در انتظار استعلام/);
+  assert.doesNotMatch(textContent(tree),/در انتظار استعلام/);assert.equal(next().props.disabled,false);
   await next().props.onClick();tree=fixture.render();assert.equal(fixture.quotes.length,2);assert.equal(fixture.orders.length,0);
-  const submit=elements(tree).find(node=>node.type==='button'&&textContent(node).includes('پرداخت و ثبت نهایی'));
+  const submit=elements(tree).find(node=>node.type==='button'&&textContent(node).trim()==='پرداخت');
   assert.equal(submit.props.disabled,false);await submit.props.onClick();assert.equal(fixture.orders.length,1);
   assert.equal(fixture.orders[0].paymentMethod,'online');assert.match(fixture.orders[0].quoteId,/quote-/);
 });
@@ -156,7 +163,7 @@ test('actual checkout selection invalidates Quote and submits only the explicitl
 test('a revoked payment stays disabled after Quote invalidation and cannot submit or repeatedly re-quote',async()=>{
   const fixture=checkoutHarness({revokePayment:true});fixture.render();let tree=fixture.render();
   elements(tree).find(node=>node.type===Choices&&node.props.name==='shipping-method').props.onChange('pickup');tree=fixture.render();
-  const next=()=>elements(tree).find(node=>node.type==='button'&&textContent(node).includes('مرحله بعد'));
+  const next=()=>elements(tree).find(node=>node.type==='button'&&(textContent(node).includes('محاسبه مبلغ')||textContent(node).includes('تأیید و ادامه')));
   await next().props.onClick();tree=fixture.render();
   elements(tree).find(node=>node.type===Choices&&node.props.name==='payment-method').props.onChange('online');tree=fixture.render();
   await next().props.onClick();fixture.render();tree=fixture.render();
@@ -164,4 +171,17 @@ test('a revoked payment stays disabled after Quote invalidation and cannot submi
   assert.equal(payment.props.options[0].enabled,false);assert.equal(payment.props.selectedId,'');assert.match(textContent(tree),/پرداخت آنلاین فروشگاه فعلاً فعال نیست/);
   assert.equal(fixture.orders.length,0);assert.equal(fixture.quotes.length,2);
   await next().props.onClick();assert.equal(fixture.quotes.length,2);
+});
+
+test('a Quote for a different shipping method never enables payment',async()=>{
+  const fixture=checkoutHarness({mismatchShipping:true});fixture.render();let tree=fixture.render();
+  elements(tree).find(node=>node.type===Choices&&node.props.name==='shipping-method').props.onChange('pickup');tree=fixture.render();
+  const calculate=elements(tree).find(node=>node.type==='button'&&textContent(node).includes('محاسبه مبلغ'));
+  await calculate.props.onClick();tree=fixture.render();
+  assert.equal(fixture.quotes.length,1);assert.match(textContent(tree),/بررسی مبلغ و موجودی سبد انجام نشد/);
+});
+
+test('checkout method cards omit repeated helper copy',()=>{
+  const markup=renderToStaticMarkup(React.createElement(Choices,{title:'روش ارسال',name:'shipping',options:[{id:'post',name:'پست',enabled:true}],selectedId:'',onChange:()=>{}}));
+  assert.doesNotMatch(markup,/یک روش را انتخاب کنید/);
 });

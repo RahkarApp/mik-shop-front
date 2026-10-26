@@ -13,7 +13,12 @@ export function normalizeCheckoutMethods(data) {
   if (new Set(shippingMethods.map(method=>method.id)).size !== shippingMethods.length || new Set(paymentMethods.map(method=>method.id)).size !== paymentMethods.length) {
     throw Object.assign(new Error('دریافت روش‌های خرید کامل نشد.'), {code:'INVALID_BACKEND_RESPONSE'});
   }
-  return {shippingMethods:shippingMethods.filter(method => method.active === true), paymentMethods};
+  const activeShippingMethods=shippingMethods.filter(method => method.active === true);
+  if (activeShippingMethods.some(method => !Number.isSafeInteger(method.amount) || method.amount < 0 || method.currency !== 'TOMAN' || typeof method.requiresAddress !== 'boolean') ||
+      paymentMethods.some(method => typeof method.enabled !== 'boolean')) {
+    throw Object.assign(new Error('دریافت روش‌های خرید کامل نشد.'), {code:'INVALID_BACKEND_RESPONSE'});
+  }
+  return {shippingMethods:activeShippingMethods, paymentMethods};
 }
 
 /** The published order contract supports online only; a Quote can revoke catalog availability. */

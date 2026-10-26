@@ -93,6 +93,7 @@ export default function CheckoutClient() {
     const cartFingerprint=JSON.stringify(cart.map(item=>[item.cartItemId,item.proUID,item.quantity]));
     const selectedShipping=shippingMethods.find(method=>method.id===shippingMethodId);
     const paymentOptions=checkoutPaymentOptions(paymentMethods,paymentCheck);
+    const selectedPayment=paymentOptions.find(method=>method.id===paymentMethodId&&method.enabled);
     const effectiveAddressId=selectedShipping?.requiresAddress===false?'':addressId;
     const quoteInputKey=JSON.stringify([cartFingerprint,shippingMethodId,effectiveAddressId,formData.province,formData.city,formData.address,formData.postalCode,paymentMethodId]);
     useEffect(() => {setQuote(current=>current?.inputKey===quoteInputKey?current:null);}, [quoteInputKey]);
@@ -117,6 +118,8 @@ export default function CheckoutClient() {
             )
         }
     }
+    if (!orderComplete&&methodsLoading) return <p role="status" className="py-20 text-center text-gray-500">در حال دریافت روش‌های خرید...</p>;
+    if (!orderComplete&&methodsError) return <div className="py-20 text-center space-y-4"><p role="alert" className="text-rose-700">{methodsError}</p><button type="button" onClick={retryMethods} className="bg-primary text-white px-5 py-3 rounded-xl">تلاش دوباره</button></div>;
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -195,15 +198,18 @@ export default function CheckoutClient() {
       return id;
     }
     async function fetchQuote() {
+      const requestedShippingId=shippingMethodId;
       const addr=await getValidAddress();
       const active=await ensureActiveCheckout();
-      const fingerprint=JSON.stringify({checkoutId:active.checkoutId,revision:active.revision,shippingMethodId,addressId:addr});
+      const fingerprint=JSON.stringify({checkoutId:active.checkoutId,revision:active.revision,shippingMethodId:requestedShippingId,addressId:addr});
       if(quoteIntent.current?.fingerprint!==fingerprint)quoteIntent.current={fingerprint,key:crypto.randomUUID()};
-      const result=await quoteCheckout(active.checkoutId,shippingMethodId,addr,quoteIntent.current.key);
-      if(!result?.quoteId||!result.totals||!Number.isSafeInteger(result.totals.total)||result.totals.total<0||typeof result.orderSubmissionAvailable!=='boolean'||!Array.isArray(result.paymentMethods)||!Number.isFinite(Date.parse(result.expiresAt)))throw Object.assign(new Error(),{code:'INVALID_BACKEND_RESPONSE'});
+      const result=await quoteCheckout(active.checkoutId,requestedShippingId,addr,quoteIntent.current.key);
+      const totals=result?.totals;
+      const quotedShippingId=String(result?.shippingMethod?.shippingMethodId ?? result?.shippingMethod?.id ?? '');
+      if(!result?.quoteId||result.currency!=='TOMAN'||totals?.currency!=='TOMAN'||![totals.subtotal,totals.shippingAmount,totals.discountAmount,totals.taxAmount,totals.total].every(amount=>Number.isSafeInteger(amount)&&amount>=0)||quotedShippingId!==String(requestedShippingId)||typeof result.orderSubmissionAvailable!=='boolean'||!Array.isArray(result.paymentMethods)||!Number.isFinite(Date.parse(result.expiresAt)))throw Object.assign(new Error(),{code:'INVALID_BACKEND_RESPONSE'});
       if(Date.parse(result.expiresAt)<=Date.now())throw Object.assign(new Error(),{code:'QUOTE_EXPIRED'});
       setPaymentCheck(result);
-      const inputKey=JSON.stringify([cartFingerprint,shippingMethodId,addr||'',formData.province,formData.city,formData.address,formData.postalCode,paymentMethodId]);
+      const inputKey=JSON.stringify([cartFingerprint,requestedShippingId,addr||'',formData.province,formData.city,formData.address,formData.postalCode,paymentMethodId]);
       setQuote({...result,...result.totals,shipping:result.totals.shippingAmount,discount:result.totals.discountAmount,tax:result.totals.taxAmount,inputKey});
       return result;
     }
@@ -226,7 +232,7 @@ export default function CheckoutClient() {
 
     const handlePlaceOrder=async()=>{
       if(operationLock.current||isProcessing||uncertain||orderId||!quote||!checkout)return;
-      if(!paymentOptions.some(method=>method.id===paymentMethodId&&method.enabled)){setSubmitError(customerErrorMessage({code:'PAYMENT_METHOD_REQUIRED'}));return;}
+      if(!selectedPayment){setSubmitError(customerErrorMessage({code:'PAYMENT_METHOD_REQUIRED'}));return;}
       if(!Number.isFinite(Date.parse(quote.expiresAt))||Date.parse(quote.expiresAt)<=Date.now()){setQuote(null);setSubmitError('اعتبار استعلام پایان یافته است؛ به مرحله اطلاعات ارسال برگردید و دوباره استعلام بگیرید');return;}
       operationLock.current=true;
       setIsProcessing(true);setSubmitError('');let posting=false;
@@ -296,8 +302,6 @@ export default function CheckoutClient() {
         <div className="w-full max-w-6xl mx-auto py-8 px-4 grid grid-cols-1 lg:grid-cols-12 gap-8 relative items-start">
 
             {submitError && <div role="alert" className="col-span-12 text-red-600 p-3 bg-red-50 rounded-xl">{submitError}{uncertain && <p>پاسخ سرور نامشخص است؛ تا بررسی سفارش‌ها یا تماس با فروشگاه، ثبت مجدد غیرفعال است.</p>}</div>}
-            {methodsError && <div role="alert" className="col-span-12 text-rose-700 bg-rose-50 p-4 rounded-xl"><p>{methodsError}</p><button type="button" onClick={retryMethods} className="underline mt-3">دریافت دوباره روش‌های خرید</button></div>}
-            {methodsLoading&&<p role="status" className="col-span-12 text-gray-500">در حال دریافت روش‌های ارسال و نشانی‌ها...</p>}
             {/* Steps Progress (Mobile & Desktop) */}
             <div className="col-span-12 mb-4">
                 <div className="flex items-center justify-between relative max-w-3xl mx-auto">
@@ -333,7 +337,7 @@ export default function CheckoutClient() {
 
             {/* Main Form Content */}
             <div className="col-span-12 lg:col-span-8">
-                <fieldset disabled={isProcessing || methodsLoading} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8 min-h-[400px]">
+                <fieldset disabled={isProcessing} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8 min-h-[400px]">
                     <AnimatePresence mode="wait">
                         {currentStep === 1 && (
                             <motion.div
@@ -347,12 +351,10 @@ export default function CheckoutClient() {
                                     <MapPin className="text-primary" />
                                     اطلاعات گیرنده و آدرس
                                 </h2>
-                                {!methodsLoading && <CheckoutMethodChoices title="روش ارسال" name="shipping-method" selectedId={shippingMethodId}
-                                  options={shippingMethods.map(method=>({...method,enabled:true,detail:method.amount==null?'هزینه ارسال هنگام بررسی سبد مشخص می‌شود.':formatMoney(method.amount,method.currency)}))}
+                                <CheckoutMethodChoices title="روش ارسال" name="shipping-method" selectedId={shippingMethodId}
+                                  options={shippingMethods.map(method=>({...method,enabled:true,detail:formatMoney(method.amount,method.currency)}))}
                                   onChange={id=>{setShippingMethodId(id);setAddressId('');setQuote(null);setSubmitError('');}}
-                                  emptyMessage="روش ارسالی برای این فروشگاه در دسترس نیست. برای ادامه خرید با پشتیبانی فروشگاه تماس بگیرید."/>}
-                                {!methodsLoading&&<button type="button" onClick={retryMethods} className="text-primary text-sm underline self-start">به‌روزرسانی روش‌های خرید</button>}
-                                {selectedShipping?.requiresAddress===false&&<p className="text-sm text-gray-500 bg-gray-50 p-3 rounded-xl">برای این روش ارسال، وارد کردن نشانی لازم نیست.</p>}
+                                  emptyMessage="روش ارسالی برای این فروشگاه در دسترس نیست. برای ادامه خرید با پشتیبانی فروشگاه تماس بگیرید."/>
                                 {!!savedAddresses.length&&selectedShipping?.requiresAddress!==false&&<label className="block text-sm">نشانی ذخیره‌شده
                                   <select className="block w-full border rounded-xl p-3 mt-2" value={addressId} onChange={e=>setAddressId(e.target.value)}>
                                     <option value="">نشانی جدید از فرم پایین</option>
@@ -439,11 +441,9 @@ export default function CheckoutClient() {
                                     انتخاب روش پرداخت
                                 </h2>
 
-                                <CheckoutMethodChoices title="روش‌های پرداخت فروشگاه" name="payment-method" options={paymentOptions} selectedId={paymentMethodId}
+                                <CheckoutMethodChoices title="روش پرداخت" name="payment-method" options={paymentOptions} selectedId={paymentMethodId}
                                   onChange={id=>{setPaymentMethodId(id);setQuote(null);setSubmitError('');}}
                                   emptyMessage="روش پرداختی برای این فروشگاه در دسترس نیست. لطفاً با پشتیبانی فروشگاه تماس بگیرید."/>
-                                <button type="button" onClick={retryMethods} className="text-primary text-sm underline self-start">به‌روزرسانی روش‌های خرید</button>
-                                <p className="bg-gray-50 text-gray-600 p-4 rounded-xl text-sm leading-relaxed">روش پرداخت و مبلغ سفارش پیش از ثبت نهایی دوباره بررسی می‌شوند.</p>
                             </motion.div>
                         )}
 
@@ -506,18 +506,18 @@ export default function CheckoutClient() {
                         {currentStep < 3 ? (
                             <button
                                 onClick={nextStep}
-                                disabled={isProcessing || methodsLoading || !!methodsError || shippingMethods.length===0}
+                                disabled={isProcessing || methodsLoading || !!methodsError || (currentStep===1 ? !selectedShipping : !selectedPayment)}
                                 className="flex items-center gap-2 px-8 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition shadow-lg shadow-primary/30 font-bold disabled:opacity-60 disabled:cursor-not-allowed"
                             >
-                                {isProcessing ? 'در حال بررسی سبد...' : 'مرحله بعد'} <ChevronLeft size={18} />
+                                {isProcessing ? 'در حال محاسبه...' : currentStep===1 ? 'محاسبه مبلغ' : 'تأیید و ادامه'} <ChevronLeft size={18} />
                             </button>
                         ) : (
                             <button
                                 onClick={handlePlaceOrder}
-                                disabled={isProcessing || uncertain || !!orderId || !quote || !paymentOptions.some(method=>method.id===paymentMethodId&&method.enabled)}
+                                disabled={isProcessing || uncertain || !!orderId || !quote || !selectedShipping || !selectedPayment}
                                 className="flex items-center gap-2 px-8 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-600/30 font-bold disabled:opacity-70 disabled:cursor-not-allowed"
                             >
-                                {isProcessing ? "در حال پردازش..." : "پرداخت و ثبت نهایی"}
+                                {isProcessing ? "در حال پردازش..." : "پرداخت"}
                             </button>
                         )}
                     </div>
@@ -530,11 +530,11 @@ export default function CheckoutClient() {
                     <h3 className="font-bold text-gray-800 border-b border-gray-100 pb-3">فاکتور نهایی</h3>
                     <div className="flex justify-between text-sm text-gray-600">
                         <span>قیمت کالاها ({toPersianDigits(cart.length)})</span>
-                        <span>{quote ? formatMoney(quote.subtotal, quote.currency) : "در انتظار استعلام"}</span>
+                        <span>{quote ? formatMoney(quote.subtotal, quote.currency) : "—"}</span>
                     </div>
                     <div className="flex justify-between text-sm text-gray-600">
                         <span>هزینه ارسال</span>
-                        <span>{quote ? formatMoney(quote.shipping, quote.currency) : "در انتظار استعلام"}</span>
+                        <span>{quote ? formatMoney(quote.shipping, quote.currency) : "—"}</span>
                     </div>
                     {quote && <>
                         <div className="flex justify-between text-sm text-gray-600"><span>تخفیف</span><span>{formatMoney(quote.discount, quote.currency)}</span></div>
@@ -542,7 +542,7 @@ export default function CheckoutClient() {
                     </>}
                     <div className="flex justify-between text-base font-bold text-gray-900 border-t border-gray-100 pt-3">
                         <span>مبلغ قابل پرداخت</span>
-                        <span>{quote ? formatMoney(quote.total, quote.currency) : "در انتظار استعلام"}</span>
+                        <span>{quote ? formatMoney(quote.total, quote.currency) : "—"}</span>
                     </div>
                 </div>
             </div>
