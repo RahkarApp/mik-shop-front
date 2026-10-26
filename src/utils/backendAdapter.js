@@ -91,8 +91,8 @@ export function adaptResponse(path, method, response) {
   if (pathname === '/me' && payload) return {...payload, id:payload.customerId??payload.id, addresses:payload.addresses||[]};
   if (pathname === '/addresses' && method === 'GET') return payload?.items||[];
   if (pathname === '/shop-methods') return payload;
-  if (pathname === '/auth/otp/request' && method === 'POST') return response;
-  if (pathname === '/auth/otp/verify' && method === 'POST') return response;
+  if (pathname === '/auth/otp/request' && method === 'POST') return payload;
+  if (pathname === '/auth/otp/verify' && method === 'POST') return payload;
   if (pathname === '/orders' && method === 'GET') { const list=Array.isArray(payload)?payload:payload?.items; return Array.isArray(list) ? list.map(adaptOrder) : payload; }
   if (/^\/orders\/[^/]+$/.test(pathname) && method === 'GET') return adaptOrder(payload);
   return payload;

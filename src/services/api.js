@@ -20,6 +20,12 @@ export function getAccessToken() {
 }
 export function clearAccessToken(){setAccessToken('');}
 const inFlight=new Map();
+function retryAfterSeconds(value) {
+  if(value==null||value==='')return null;
+  const number=Number(value);
+  const seconds=Number.isFinite(number)?Math.ceil(number):Math.ceil((Date.parse(value)-Date.now())/1000);
+  return Number.isSafeInteger(seconds)&&seconds>=0?seconds:null;
+}
 export async function api(path,{method='GET',body,tenantId,host,token,signal,idempotencyKey}={}){
   const browser=typeof window!=='undefined';
   if(isDemoRuntime() || (!browser && host==='__demo_preview__'))return demo(path,{method,body,tenantId,idempotencyKey});
@@ -53,7 +59,13 @@ export async function api(path,{method='GET',body,tenantId,host,token,signal,ide
           error.status=502;error.code='INVALID_BACKEND_RESPONSE';throw error;
         }
       }
-      if(!res.ok||raw?.status===false){if(browser&&res.status===401)clearAccessToken();const err=new Error(raw?.message||`خطای API (${res.status})`);err.status=res.status;err.code=raw?.code;throw err;}
+      if(!res.ok||raw?.status===false){
+        if(browser&&res.status===401)clearAccessToken();
+        const err=new Error(raw?.message||`خطای API (${res.status})`);
+        err.status=res.status;err.code=raw?.code;err.retryable=raw?.retryable===true;
+        err.retryAfterSeconds=retryAfterSeconds(raw?.retryAfterSeconds??raw?.resendAfterSeconds??raw?.data?.retryAfterSeconds??raw?.data?.resendAfterSeconds??res.headers?.get?.('retry-after'));
+        throw err;
+      }
       if(path==='/auth/otp/verify'){
         const payload=raw?.data;
         if(!payload?.accessToken)throw new Error('توکن ورود از بک‌اند دریافت نشد');
@@ -155,7 +167,7 @@ async function serverRequest(target,{method,headers,body,signal}) {
    res.on('data',chunk=>{size+=chunk.length;if(size>1024*1024){req.destroy(new Error('پاسخ بک‌اند بیش از حد بزرگ است'));return;}chunks.push(chunk);});
    res.on('aborted',()=>reject(new Error('پاسخ بک‌اند فروشگاه قطع شد')));
    res.on('error',reject);
-   res.on('end',()=>{const raw=Buffer.concat(chunks).toString('utf8');resolve({ok:res.statusCode>=200&&res.statusCode<300,status:res.statusCode,json:async()=>JSON.parse(raw)});});
+   res.on('end',()=>{const raw=Buffer.concat(chunks).toString('utf8');resolve({ok:res.statusCode>=200&&res.statusCode<300,status:res.statusCode,headers:{get:name=>res.headers?.[name.toLowerCase()]??null},json:async()=>JSON.parse(raw)});});
   }); req.on('timeout',()=>req.destroy(new Error('مهلت اتصال به بک‌اند فروشگاه پایان یافت')));req.on('error',reject);req.end(body);
  });
 }

@@ -4,6 +4,7 @@ import {isDemoRuntime} from '@/utils/demoRoute';
 
 import React, { useState, useRef, useEffect } from "react";
 import {useShopActions} from '@/hooks/useShopActions';
+import {useCheckoutAccess} from '@/hooks/useCheckoutAccess';
 import { useSiteConfig } from "@/hooks/useSiteConfig";
 import {formatMoney,normalizeDigits} from '@/utils/format';
 import {purchaseStorageScope} from '@/utils/cart';
@@ -40,7 +41,8 @@ const STEPS = [
 export default function CheckoutClient() {
     const { cart, cartTotal, dispatch, ready } = useCart();
     const { config, tenantId, loading:configLoading } = useSiteConfig();
-    const {quoteCheckout,placeOrder,getShopMethods,startCheckout,getCheckout,updateCheckoutItems,createAddress,getProfile}=useShopActions();
+    const {quoteCheckout,placeOrder,getShopMethods,startCheckout,getCheckout,updateCheckoutItems,createAddress}=useShopActions();
+    const access=useCheckoutAccess();
     const [quote, setQuote] = useState(null);
     const [checkout, setCheckout] = useState(null);
     const [shippingMethods,setShippingMethods]=useState([]);
@@ -48,21 +50,20 @@ export default function CheckoutClient() {
     const [addressId,setAddressId]=useState('');
     const [savedAddresses,setSavedAddresses]=useState([]);
     const [methodsLoading,setMethodsLoading]=useState(true);
-    const [needsLogin,setNeedsLogin]=useState(false);
     const startIntent=useRef(null);
     const quoteIntent=useRef(null);
     useEffect(()=>{
-      if(configLoading||!tenantId)return;
+      if(configLoading||!tenantId||access.status!=='allowed')return;
       let active=true;
       setMethodsLoading(true);
-      Promise.all([getShopMethods(),getProfile()]).then(([methods,profile])=>{
+      getShopMethods().then(methods=>{
         if(!active)return;
         setShippingMethods((methods?.shippingMethods||[]).filter(m=>m.active!==false));
-        setSavedAddresses(profile?.addresses||[]);
-        setFormData(previous=>({...previous,name:profile?.name||'',phone:profile?.phone||''}));
-      }).catch(e=>{if(active){setSubmitError(e.message);setNeedsLogin(e.status===401)}}).finally(()=>{if(active)setMethodsLoading(false)});
+        setSavedAddresses(access.profile?.addresses||[]);
+        setFormData(previous=>({...previous,name:access.profile?.name||'',phone:access.profile?.phone||''}));
+      }).catch(e=>{if(active){if(e.status===401)access.redirectToLogin();else setSubmitError('دریافت روش‌های ارسال انجام نشد. کمی بعد دوباره تلاش کنید.')}}).finally(()=>{if(active)setMethodsLoading(false)});
       return ()=>{active=false};
-    },[tenantId,configLoading]);
+    },[tenantId,configLoading,access.status,access.profile]);
 
     const [orderId, setOrderId] = useState(null);
     const [submitError,setSubmitError]=useState('');
@@ -89,6 +90,8 @@ export default function CheckoutClient() {
     useEffect(() => {setQuote(current=>current?.inputKey===quoteInputKey?current:null);}, [quoteInputKey]);
 
     // اگر سبد خرید خالی است (و سفارش تکمیل نشده)
+    if (access.status==='checking'||access.status==='redirecting') return <p role="status" className="py-20 text-center">{access.status==='redirecting'?'برای ادامه خرید، به صفحه ورود منتقل می‌شوید...':'در حال بررسی ورود به حساب...'}</p>;
+    if (access.status==='error') return <div className="py-20 text-center space-y-4"><p role="alert">{access.error}</p><button type="button" onClick={access.retry} className="bg-primary text-white px-5 py-3 rounded-xl">تلاش دوباره</button></div>;
     if (!ready) return <p role="status" className="py-20 text-center">در حال دریافت سبد خرید...</p>;
     if (cart.length === 0 && !orderComplete) {
         if (typeof window !== 'undefined') {
@@ -201,7 +204,7 @@ export default function CheckoutClient() {
       try {
       if(currentStep===1){
         setIsProcessing(true);setSubmitError('');
-        try{await fetchQuote()}catch(e){setSubmitError(e.message);setNeedsLogin(e.status===401);return}finally{setIsProcessing(false)}
+        try{await fetchQuote()}catch(e){if(e.status===401)access.redirectToLogin();else setSubmitError(/[\u0600-\u06ff]/.test(e.message||'')?e.message:'بررسی سبد خرید انجام نشد. کمی بعد دوباره تلاش کنید.');return}finally{setIsProcessing(false)}
       }
       setCurrentStep(prev=>Math.min(prev+1,STEPS.length));
       } finally {operationLock.current=false;}
@@ -239,7 +242,7 @@ export default function CheckoutClient() {
           const link=new URL(order.paymentUrl);
           if(link.protocol==='https:')window.location.assign(link.href);
         }
-      }catch(e){if(posting&&(!e.status||e.status>=500))setUncertain(true);setSubmitError(e.message||'وضعیت ثبت سفارش نامشخص است؛ سفارش جدید نسازید');}
+      }catch(e){if(posting&&(!e.status||e.status>=500))setUncertain(true);if(e.status===401)access.redirectToLogin();else setSubmitError(/[\u0600-\u06ff]/.test(e.message||'')?e.message:'نتیجه ثبت سفارش مشخص نشد. پیش از تلاش دوباره، وضعیت سفارش‌ها را بررسی کنید.');}
       finally{setIsProcessing(false);operationLock.current=false}
     };
 
@@ -277,7 +280,6 @@ export default function CheckoutClient() {
         <div className="w-full max-w-6xl mx-auto py-8 px-4 grid grid-cols-1 lg:grid-cols-12 gap-8 relative items-start">
 
             {submitError && <div role="alert" className="col-span-12 text-red-600 p-3 bg-red-50 rounded-xl">{submitError}{uncertain && <p>پاسخ سرور نامشخص است؛ تا بررسی سفارش‌ها یا تماس با فروشگاه، ثبت مجدد غیرفعال است.</p>}</div>}
-            {needsLogin&&<Link href="/login?next=%2Fcheckout" className="col-span-12 text-primary underline">ورود به حساب و ادامه خرید</Link>}
             {methodsLoading&&<p role="status" className="col-span-12 text-gray-500">در حال دریافت روش‌های ارسال و نشانی‌ها...</p>}
             {/* Steps Progress (Mobile & Desktop) */}
             <div className="col-span-12 mb-4">

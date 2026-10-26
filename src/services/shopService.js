@@ -1,5 +1,6 @@
 /** دامنه سفارش و حساب؛ تمام شبکه از api.js می‌گذرد. */
 import { api, clearAccessToken } from './api';
+import {authErrorMessage,isOtpRateLimited} from '@/utils/auth';
 const pathId = (id) => encodeURIComponent(id);
 export const getOrders = (tenantId, token) => api('/orders', {tenantId, token});
 export const getOrder = (id, tenantId, token) => api(`/orders/${pathId(id)}`, {tenantId, token});
@@ -23,8 +24,22 @@ export const getWishlist = (tenantId, token) => api('/wishlist', {tenantId,token
 export const addWishlist = (productId, tenantId, token) => api('/wishlist', {method:'POST',body:{productId},tenantId,token});
 export const removeWishlist = (id, tenantId, token) => api(`/wishlist/${pathId(id)}`,{method:'DELETE',tenantId,token});
 export const logout = async (tenantId) => {const result=await api('/auth/logout',{method:'POST',tenantId});clearAccessToken();return result;};
-export const requestOtp = (phone, tenantId) => api('/auth/otp/request',{method:'POST',body:{phone},tenantId});
-export const verifyOtp = (challengeId, code, tenantId) => api('/auth/otp/verify',{method:'POST',body:{challengeId,code},tenantId});
+export async function requestOtp(phone, tenantId) {
+ try {
+  const result=await api('/auth/otp/request',{method:'POST',body:{phone},tenantId});
+  if(typeof result?.challengeId!=='string'||!result.challengeId.trim()) {
+   const error=new Error('درخواست کد تأیید کامل نشد. کمی بعد دوباره تلاش کنید');
+   error.code='INVALID_OTP_RESPONSE';
+   error.retryAfterSeconds=Number.isSafeInteger(result?.resendAfterSeconds)?result.resendAfterSeconds:60;
+   throw error;
+  }
+  return result;
+ } catch(error) {error.rateLimited=isOtpRateLimited(error);error.message=authErrorMessage(error,'request');throw error;}
+}
+export async function verifyOtp(challengeId, code, tenantId) {
+ try {return await api('/auth/otp/verify',{method:'POST',body:{challengeId,code},tenantId});}
+ catch(error) {error.rateLimited=isOtpRateLimited(error);error.message=authErrorMessage(error,'verify');throw error;}
+}
 export const getShopMethods=(tenantId)=>api('/shop-methods',{tenantId});
 export const startCheckout=(items,tenantId,key)=>api('/checkout/start',{method:'POST',body:{items},tenantId,idempotencyKey:key});
 export const getCheckout=(id,tenantId)=>api(`/checkout/${pathId(id)}`,{tenantId});

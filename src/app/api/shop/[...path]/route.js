@@ -44,7 +44,7 @@ async function forward(request,{params}){
         response.on('data',chunk=>{total+=chunk.length;if(total>1024*1024)upstreamRequest.destroy(new Error('Oversize'));else parts.push(chunk)});
         response.on('aborted',()=>reject(new Error('Backend response interrupted')));
         response.on('error',reject);
-        response.on('end',()=>resolve({status:response.statusCode,body:Buffer.concat(parts).toString('utf8')}));
+        response.on('end',()=>resolve({status:response.statusCode,retryAfter:response.headers?.['retry-after'],body:Buffer.concat(parts).toString('utf8')}));
       });
       upstreamRequest.on('timeout',()=>upstreamRequest.destroy(new Error('Backend request timed out')));
       upstreamRequest.on('error',reject);upstreamRequest.end(body);
@@ -55,7 +55,7 @@ async function forward(request,{params}){
     if(!payload||typeof payload!=='object'||Array.isArray(payload)||typeof payload.status!=='boolean'||(payload.status===true&&!Object.hasOwn(payload,'data'))){
       return NextResponse.json({status:false,code:'INVALID_BACKEND_RESPONSE',message:'پاسخ بک‌اند فروشگاه معتبر نیست؛ مقصد SHOP_BACKEND_ORIGIN باید API شاپ باشد'},{status:502,headers:{'Cache-Control':'no-store'}});
     }
-    return new NextResponse(JSON.stringify(payload),{status:upstream.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+    return new NextResponse(JSON.stringify(payload),{status:upstream.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...(upstream.retryAfter?{'Retry-After':upstream.retryAfter}:{})}});
   } catch {return NextResponse.json({status:false,code:'BACKEND_UNAVAILABLE',message:'ارتباط با سرور فروشگاه برقرار نشد'},{status:502});}
 }
 export async function GET(req,context){return forward(req,context)}
