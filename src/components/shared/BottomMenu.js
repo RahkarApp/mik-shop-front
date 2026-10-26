@@ -2,9 +2,12 @@
 import Link from "@/components/PreviewLink";
 import { Home, List, ShoppingCart, Search, User } from "lucide-react";
 import { usePathname } from "next/navigation";
+import {useCart} from './CartContext';
+import CartBadge from './CartBadge';
 
 export default function BottomMenu({ onOpenCategoryModal, onOpenSearchModal, onOpenFilterModal, activeModal }) {
   const pathname = usePathname();
+  const {cartItemCount} = useCart();
   return (
     <nav className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 shadow-2xl z-[60] md:hidden flex justify-between items-center px-4 py-2" style={{height: '60px'}}>
       <Link href="/" className="flex flex-col items-center hover:text-primary" prefetch={false}>
@@ -20,7 +23,7 @@ export default function BottomMenu({ onOpenCategoryModal, onOpenSearchModal, onO
         <span className="text-xs mt-1 text-gray-700">دسته‌بندی</span>
       </button>
       <Link href="/cart" className="flex flex-col items-center hover:text-primary" prefetch={false}>
-        <ShoppingCart className={`w-6 h-6 ${['/', '/cart', '/profile'].includes(pathname) && pathname === '/cart' ? 'text-primary' : 'text-gray-700'}`} />
+        <span className="relative inline-flex"><ShoppingCart className={`w-6 h-6 ${pathname.endsWith('/cart') ? 'text-primary' : 'text-gray-700'}`} /><CartBadge count={cartItemCount}/></span>
         <span className={`text-xs mt-1 ${['/', '/cart', '/profile'].includes(pathname) && pathname === '/cart' ? 'text-primary' : 'text-gray-700'}`}>سبد خرید</span>
       </Link>
       <button

@@ -1,208 +1,60 @@
 'use client';
+
+import {useEffect, useRef, useState} from 'react';
+import {useRouter, usePathname, useSearchParams, useParams} from 'next/navigation';
+import {X} from 'lucide-react';
+import {useCategories} from '@/hooks/useCategories';
 import {demoHref, isDemoPath} from '@/utils/demoRoute';
-import { useState, useEffect } from "react";
-import {useRouter,usePathname,useSearchParams,useParams} from "next/navigation";
-import { X, ChevronDown, Check } from "lucide-react";
-import {useCategories} from "@/hooks/useCategories";
+import {formatPrice} from '@/utils/format';
+import CategoryTree from './CategoryTree';
 
-// داده‌های تستی با 5 سطح تودرتو
-export default function FilterModal({ isOpen, onClose }) {
-  const router=useRouter(),pathname=usePathname(),params=useSearchParams();
-  const routeParams=useParams();
-  const supportsFilters=process.env.NEXT_PUBLIC_DATA_MODE==='demo'||isDemoPath(pathname);
-  const apply=()=>{const p=new URLSearchParams(params.toString());if(selectedCategory)p.set('category',selectedCategory);else p.delete('category');if(supportsFilters){if(showAvailableOnly)p.set('availableOnly','true');else p.delete('availableOnly');if(priceRange[1]<10000000)p.set('maxPrice',String(priceRange[1]));else p.delete('maxPrice');}p.delete('page');router.push(demoHref(`/search-result?${p}`));onClose()};
-  const {categories:CATEGORIES=[]}=useCategories();
-  const [showAvailableOnly, setShowAvailableOnly] = useState(false);
-  const [priceRange, setPriceRange] = useState([0, 10000000]);
-  const [openCategories, setOpenCategories] = useState({});
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
-  useEffect(()=>{if(isOpen){setSelectedCategory(params.get('category')||routeParams.category||null);setShowAvailableOnly(params.get('availableOnly')==='true');setPriceRange([0,Number(params.get('maxPrice')??10000000)]);}},[isOpen,params,routeParams.category]);
-
-  // تابع برای پیدا کردن مسیر والدین یک دسته‌بندی
-  const findParentCategories = (categories, targetId, path = []) => {
-    for (const category of categories) {
-      if (category.id === targetId) {
-        return [...path, category.id];
-      }
-      if (category.subcategories) {
-        const subPath = findParentCategories(category.subcategories, targetId, [...path, category.id]);
-        if (subPath.length > 0) return subPath;
-      }
-    }
-    return [];
-  };
-
-  // تنظیم دراپ‌داون‌های باز بر اساس گزینه انتخاب‌شده
+export default function FilterModal({isOpen, onClose}) {
+  const router = useRouter(), pathname = usePathname(), params = useSearchParams(), routeParams = useParams();
+  const categories = useCategories({enabled:isOpen});
+  const supportsFilters = process.env.NEXT_PUBLIC_DATA_MODE === 'demo' || isDemoPath(pathname);
+  const [availableOnly, setAvailableOnly] = useState(false), [maxPrice, setMaxPrice] = useState(10000000), [selected, setSelected] = useState(null);
+  const panel = useRef(null);
   useEffect(() => {
-    if (selectedCategory) {
-      setIsCategoriesOpen(true);
-      const parentIds = findParentCategories(CATEGORIES, selectedCategory);
-      setOpenCategories((prev) => {
-        const newOpenCategories = { ...prev };
-        parentIds.forEach((id) => {
-          newOpenCategories[id] = true;
-        });
-        return newOpenCategories;
-      });
-    } else {
-      setIsCategoriesOpen(false);
-      setOpenCategories({});
-    }
-  }, [selectedCategory]);
-
-  // تابع برای باز و بسته کردن دراپ‌داون‌ها
-  const toggleCategory = (categoryId) => {
-    setOpenCategories((prev) => ({
-      ...prev,
-      [categoryId]: !prev[categoryId],
-    }));
-  };
-
-  // تابع برای انتخاب دسته‌بندی (تک‌انتخابی)
-  const toggleSubcategory = (categoryId) => {
-    setSelectedCategory(categoryId === selectedCategory ? null : categoryId);
-  };
-
-  // بستن مدال تو صفحه‌های بزرگ‌تر (رزولوشن 768 به بالا)
+    if (!isOpen) return;
+    const previous = document.activeElement, overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';panel.current?.querySelector('input')?.focus();
+    const resize = () => {if (window.innerWidth >= 768) onClose();};
+    window.addEventListener('resize',resize);
+    return () => {window.removeEventListener('resize',resize);document.body.style.overflow=overflow;previous?.focus?.();};
+  }, [isOpen]);
   useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 768 && isOpen) {
-        onClose();
-      }
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [isOpen, onClose]);
-
-  // کامپوننت بازگشتی برای رندر دسته‌بندی‌های تودرتو
-  const renderCategory = (category, level = 0) => {
-    return (
-      <div key={category.id} className="mb-2">
-        <div className="w-full flex justify-between items-center py-3 px-4">
-          <button
-            className="flex-1 flex items-center gap-2 text-left text-base text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200"
-            onClick={() => toggleSubcategory(category.id)}
-          >
-            {selectedCategory === category.id && (
-              <Check className="w-5 h-5 text-primary" />
-            )}
-            <span className="font-medium" style={{ paddingRight: `${level * 12}px` }}>
-              {category.name}
-            </span>
-          </button>
-          {category.subcategories && (
-            <span
-              className="p-2 rounded-full hover:bg-gray-100 transition-all duration-200"
-              onClick={() => toggleCategory(category.id)}
-            >
-              <ChevronDown
-                className={`w-5 h-5 text-gray-600 transition-transform duration-200 ${
-                  openCategories[category.id] ? "rotate-180" : ""
-                }`}
-              />
-            </span>
-          )}
-        </div>
-        {category.subcategories && openCategories[category.id] && (
-          <div className="pt-2 space-y-2">
-            {category.subcategories.map((sub) => (
-              <div key={sub.id}>
-                {renderCategory(sub, level + 1)}
-              </div>
-            ))}
-          </div>
-        )}
-        {category.subcategories && openCategories[category.id] && (
-          <hr className="border-gray-200 mt-2" />
-        )}
-      </div>
-    );
-  };
-
-  if(!isOpen)return null;
-  return (
-    <div
-      role="dialog" aria-modal="true" aria-label="فیلتر محصولات"
-      className={`fixed left-0 right-0 bottom-[60px] top-0 z-50 flex justify-center items-end md:hidden transition-all duration-500 ease-in-out ${
-        isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-      }`}
-    >
-      {/* پس‌زمینه فقط با افکت بلور */}
-      <div
-        className="absolute inset-0 backdrop-blur-[1px]"
-        onClick={onClose}
-      ></div>
-
-      {/* کانتینر اصلی با گرادیانت و گوشه‌های گرد */}
-      <div
-        className={`w-full max-h-[80vh] bg-gradient-to-b from-white to-gray-50 rounded-t-3xl p-6 overflow-y-auto shadow-2xl transition-transform duration-500 ease-in-out ${
-          isOpen ? "translate-y-0" : "translate-y-full"
-        }`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* هدر با فونت شیک و آیکون بستن */}
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-800">فیلتر</h2>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-full hover:bg-gray-100 transition-colors duration-200"
-          >
-            <X className="w-6 h-6 text-gray-600 hover:text-gray-800" />
-          </button>
-        </div>
-
-        <div className="mb-6">
-          <button type="button" className="w-full text-right font-bold py-3" onClick={()=>setIsCategoriesOpen(!isCategoriesOpen)}>دسته‌بندی‌ها</button>
-          {isCategoriesOpen&&CATEGORIES.map(category=>renderCategory(category))}
-        </div>
-        {!supportsFilters&&<p className="text-sm text-gray-500">در حال حاضر فیلتر دسته‌بندی در دسترس است.</p>}
-        {/* کالاهای موجود */}
-        {supportsFilters&&<div className="mb-6">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <div className="relative">
-              <input
-                type="checkbox"
-                checked={showAvailableOnly}
-                onChange={() => setShowAvailableOnly(!showAvailableOnly)}
-                className="sr-only"
-              />
-              <div
-                className={`w-10 h-5 rounded-full shadow-inner transition-colors duration-300 ease-in-out ${
-                  showAvailableOnly ? "bg-primary" : "bg-gray-300"
-                }`}
-              >
-                <div
-                  className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ease-in-out ${
-                    showAvailableOnly ? "translate-x-5" : "translate-x-0"
-                  }`}
-                />
-              </div>
-            </div>
-            <span className="text-base text-gray-700 font-medium">کالاهای موجود</span>
-          </label>
-        </div>}
-
-        {/* محدوده قیمت */}
-        {supportsFilters&&<div>
-          <h3 className="text-base font-semibold text-gray-800 mb-3">محدوده قیمت</h3>
-          <input
-            type="range"
-            min="0"
-            max="10000000"
-            value={priceRange[1]}
-            onChange={(e) =>
-              setPriceRange([priceRange[0], Number(e.target.value)])
-            }
-            className="w-full h-2 bg-gray-200 rounded-full cursor-pointer accent-primary"
-          />
-          <div className="flex justify-between text-base text-gray-700 mt-2">
-            <span>{priceRange[0].toLocaleString()} تومان</span>
-            <span>{priceRange[1].toLocaleString()} تومان</span>
-          </div>
-        </div>}
-        <button type="button" onClick={apply} className="bg-primary text-white rounded-xl p-3 w-full mt-5">اعمال فیلتر</button>
-      </div>
+    if (!isOpen) return;
+    setSelected(params.get('category') || routeParams.category || null);
+    setAvailableOnly(params.get('availableOnly') === 'true');setMaxPrice(Number(params.get('maxPrice') ?? 10000000));
+  }, [isOpen, params, routeParams.category]);
+  if (!isOpen) return null;
+  function apply() {
+    const query = new URLSearchParams(params.toString());
+    if (selected) query.set('category',selected);else query.delete('category');
+    if (supportsFilters) {
+      if (availableOnly) query.set('availableOnly','true');else query.delete('availableOnly');
+      if (maxPrice < 10000000) query.set('maxPrice',String(maxPrice));else query.delete('maxPrice');
+    }
+    query.delete('page');router.push(demoHref(`/search-result?${query}`));onClose();
+  }
+  function handleKey(event) {
+    if(event.key==='Escape'){event.preventDefault();onClose();}
+    if(event.key!=='Tab')return;
+    const elements=[...panel.current.querySelectorAll('button:not(:disabled),input,a[href]')];
+    const first=elements[0],last=elements.at(-1);
+    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
+    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
+  }
+  return <div role="dialog" aria-modal="true" aria-label="فیلتر محصولات" className="fixed inset-0 bottom-[60px] z-50 flex justify-center items-end md:hidden" onKeyDown={handleKey}>
+    <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} aria-hidden="true"/>
+    <div ref={panel} className="relative w-full max-h-[85vh] bg-white rounded-t-3xl p-5 overflow-y-auto shadow-xl">
+      <div className="flex justify-between items-center mb-5"><h2 className="text-lg font-bold">فیلتر محصولات</h2><button type="button" onClick={onClose} aria-label="بستن فیلترها" className="p-2 rounded-lg hover:bg-gray-100"><X size={22}/></button></div>
+      <CategoryTree {...categories} onRetry={categories.retry} selectedId={selected} onSelect={setSelected} autoFocus showAll/>
+      {supportsFilters && <div className="mt-6 space-y-5">
+        <label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={availableOnly} onChange={event => setAvailableOnly(event.target.checked)} className="h-4 w-4 accent-primary"/>فقط کالاهای موجود</label>
+        <label className="block text-sm">حداکثر قیمت: {formatPrice(maxPrice)} تومان<input type="range" aria-label="حداکثر قیمت" min="0" max="10000000" value={maxPrice} onChange={event => setMaxPrice(Number(event.target.value))} className="block w-full mt-3 accent-primary"/></label>
+      </div>}
+      <button type="button" onClick={apply} className="bg-primary text-white rounded-xl p-3 w-full mt-5">اعمال فیلتر</button>
     </div>
-  );
+  </div>;
 }

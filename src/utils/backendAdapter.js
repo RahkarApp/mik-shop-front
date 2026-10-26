@@ -85,7 +85,7 @@ export function adaptResponse(path, method, response) {
   if (pathname === '/categories' && method === 'GET') {
     const entries=Array.isArray(payload)?payload:payload?.items;
     if(!Array.isArray(entries))throw Object.assign(new Error('فهرست دسته‌بندی‌های دریافت‌شده از فروشگاه معتبر نیست'),{code:'INVALID_BACKEND_RESPONSE'});
-    return {items:entries.map(c=>({...c,id:String(c.id??c.categoryId??c.uid),name:c.name})),nextCursor:payload?.nextCursor??null};
+    return {items:entries.map(c=>({...c,id:c.id??c.categoryId??c.uid,parentId:c.parentId??c.parent??null,image:c.image||c.imageUrl||'',name:c.name})),nextCursor:payload?.nextCursor??null};
   }
   if (pathname === '/me' && payload?.Profile) return {...payload.Profile, phone:payload.Profile.mobile, addresses:payload.address};
   if (pathname === '/me' && payload) return {...payload, id:payload.customerId??payload.id, addresses:payload.addresses||[]};

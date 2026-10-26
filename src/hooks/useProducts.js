@@ -5,12 +5,14 @@ import {usePathname} from 'next/navigation';
 import {useSiteConfig} from './useSiteConfig';
 import {getProducts} from '@/services/productService';
 import {isDemoPath} from '@/utils/demoRoute';
+import {customerErrorMessage} from '@/utils/customerError';
 
 export function useProducts(options = {}) {
   const {tenantId, loading:configLoading, error:configError} = useSiteConfig();
   const pathname = usePathname();
+  const [attempt, setAttempt] = useState(0);
   const {limit=8, query='', category='', sort='newest', minPrice='', maxPrice='', availableOnly='', page=1} = options;
-  const key = JSON.stringify([tenantId, isDemoPath(pathname), limit, query, category, sort, minPrice, maxPrice, availableOnly, page]);
+  const key = JSON.stringify([tenantId, isDemoPath(pathname), limit, query, category, sort, minPrice, maxPrice, availableOnly, page, attempt]);
   const [result, setResult] = useState({key:null, products:[], error:null, loading:true, hasNextPage:false});
 
   useEffect(() => {
@@ -23,10 +25,10 @@ export function useProducts(options = {}) {
         const products = Array.isArray(data) ? data : data?.items || [];
         setResult({key, products, loading:false, error:null, hasNextPage:Array.isArray(data) ? products.length >= limit : Boolean(data?.nextCursor)});
       })
-      .catch(err => {if (active) setResult({key, products:[], loading:false, error:err.message, hasNextPage:false});});
+      .catch(err => {if (active) setResult({key, products:[], loading:false, error:customerErrorMessage(err,'products'), hasNextPage:false});});
     return () => {active = false;};
   }, [key, configLoading]);
 
   if (configError) return {products:[], loading:false, error:configError, hasNextPage:false};
-  return result.key === key && !configLoading ? result : {products:[], loading:true, error:null, hasNextPage:false};
+  return {...(result.key === key && !configLoading ? result : {products:[], loading:true, error:null, hasNextPage:false}),retry:()=>setAttempt(value=>value+1)};
 }

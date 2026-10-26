@@ -25,7 +25,7 @@ export default function SearchResultClient() {
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
 
 
-  const { products, loading, error, hasNextPage } = useProducts({
+  const { products, loading, error, hasNextPage, retry } = useProducts({
     query: q,
     category: chosenCategory,
     sort:searchParams.get('sort')||'newest',
@@ -66,7 +66,7 @@ export default function SearchResultClient() {
           <FilterSortBar onOpenCategoryModal={() => setCategoryModalOpen(true)} />
 
           {loading && <p className="text-center text-gray-500 py-12">در حال جستجو...</p>}
-          {error && <div className="p-4 m-4 text-red-600 bg-red-50 rounded-lg text-sm">{error}</div>}
+          {error && <div role="alert" className="p-4 m-4 text-red-600 bg-red-50 rounded-lg text-sm"><p>{error}</p><button type="button" onClick={retry} className="underline mt-3">تلاش دوباره</button></div>}
 
           {!loading && !error && (
             <div className={`w-full ${gridClass} p-4`}>

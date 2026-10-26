@@ -5,6 +5,10 @@ import {isDemoRuntime} from '@/utils/demoRoute';
 import React, { useState, useRef, useEffect } from "react";
 import {useShopActions} from '@/hooks/useShopActions';
 import {useCheckoutAccess} from '@/hooks/useCheckoutAccess';
+import {useCheckoutMethods} from '@/hooks/useCheckoutMethods';
+import {checkoutPaymentOptions} from '@/utils/checkoutMethods';
+import {customerErrorMessage} from '@/utils/customerError';
+import CheckoutMethodChoices from './CheckoutMethodChoices';
 import { useSiteConfig } from "@/hooks/useSiteConfig";
 import {formatMoney,normalizeDigits} from '@/utils/format';
 import {purchaseStorageScope} from '@/utils/cart';
@@ -18,8 +22,6 @@ import {
     ChevronLeft,
     ChevronRight,
     Wallet,
-    Truck,
-    ShieldCheck
 } from "lucide-react";
 
 // تابع کمکی برای تبدیل اعداد به فارسی
@@ -39,31 +41,25 @@ const STEPS = [
 ];
 
 export default function CheckoutClient() {
-    const { cart, cartTotal, dispatch, ready } = useCart();
-    const { config, tenantId, loading:configLoading } = useSiteConfig();
-    const {quoteCheckout,placeOrder,getShopMethods,startCheckout,getCheckout,updateCheckoutItems,createAddress}=useShopActions();
+    const { cart, dispatch, ready } = useCart();
+    const { config, tenantId } = useSiteConfig();
+    const {quoteCheckout,placeOrder,startCheckout,getCheckout,updateCheckoutItems,createAddress}=useShopActions();
     const access=useCheckoutAccess();
+    const {shippingMethods,paymentMethods,loading:methodsLoading,error:methodsError,retry:retryMethods}=useCheckoutMethods({enabled:access.status==='allowed',onUnauthorized:access.redirectToLogin});
     const [quote, setQuote] = useState(null);
+    const [paymentCheck,setPaymentCheck]=useState(null);
     const [checkout, setCheckout] = useState(null);
-    const [shippingMethods,setShippingMethods]=useState([]);
     const [shippingMethodId,setShippingMethodId]=useState('');
+    const [paymentMethodId,setPaymentMethodId]=useState('');
     const [addressId,setAddressId]=useState('');
     const [savedAddresses,setSavedAddresses]=useState([]);
-    const [methodsLoading,setMethodsLoading]=useState(true);
     const startIntent=useRef(null);
     const quoteIntent=useRef(null);
     useEffect(()=>{
-      if(configLoading||!tenantId||access.status!=='allowed')return;
-      let active=true;
-      setMethodsLoading(true);
-      getShopMethods().then(methods=>{
-        if(!active)return;
-        setShippingMethods((methods?.shippingMethods||[]).filter(m=>m.active!==false));
-        setSavedAddresses(access.profile?.addresses||[]);
-        setFormData(previous=>({...previous,name:access.profile?.name||'',phone:access.profile?.phone||''}));
-      }).catch(e=>{if(active){if(e.status===401)access.redirectToLogin();else setSubmitError('دریافت روش‌های ارسال انجام نشد. کمی بعد دوباره تلاش کنید.')}}).finally(()=>{if(active)setMethodsLoading(false)});
-      return ()=>{active=false};
-    },[tenantId,configLoading,access.status,access.profile]);
+      if(!access.profile)return;
+      setSavedAddresses(access.profile.addresses||[]);
+      setFormData(previous=>({...previous,name:access.profile.name||'',phone:access.profile.phone||''}));
+    },[access.profile]);
 
     const [orderId, setOrderId] = useState(null);
     const [submitError,setSubmitError]=useState('');
@@ -77,7 +73,6 @@ export default function CheckoutClient() {
         city: "",
         address: "",
         postalCode: "",
-        paymentMethod: "online",
     });
     const [isProcessing, setIsProcessing] = useState(false);
     const [orderComplete, setOrderComplete] = useState(false);
@@ -86,8 +81,13 @@ export default function CheckoutClient() {
     useEffect(()=>{mounted.current=true;return()=>{mounted.current=false}},[]);
     // Address or cart changes invalidate the visible price. Only a fresh server quote can be submitted.
     const cartFingerprint=JSON.stringify(cart.map(item=>[item.cartItemId,item.proUID,item.quantity]));
-    const quoteInputKey=JSON.stringify([cartFingerprint,shippingMethodId,addressId,formData.province,formData.city,formData.address,formData.postalCode]);
+    const selectedShipping=shippingMethods.find(method=>method.id===shippingMethodId);
+    const paymentOptions=checkoutPaymentOptions(paymentMethods,paymentCheck);
+    const effectiveAddressId=selectedShipping?.requiresAddress===false?'':addressId;
+    const quoteInputKey=JSON.stringify([cartFingerprint,shippingMethodId,effectiveAddressId,formData.province,formData.city,formData.address,formData.postalCode,paymentMethodId]);
     useEffect(() => {setQuote(current=>current?.inputKey===quoteInputKey?current:null);}, [quoteInputKey]);
+    useEffect(()=>{setPaymentCheck(null);setQuote(null);},[shippingMethods,paymentMethods]);
+    useEffect(()=>{if(paymentMethodId&&!paymentOptions.some(method=>method.id===paymentMethodId&&method.enabled))setPaymentMethodId('');},[paymentMethodId,paymentCheck,paymentMethods]);
 
     // اگر سبد خرید خالی است (و سفارش تکمیل نشده)
     if (access.status==='checking'||access.status==='redirecting') return <p role="status" className="py-20 text-center">{access.status==='redirecting'?'برای ادامه خرید، به صفحه ورود منتقل می‌شوید...':'در حال بررسی ورود به حساب...'}</p>;
@@ -116,7 +116,7 @@ export default function CheckoutClient() {
     const itemsForCheckout=()=>cart.map(x=>({productId:String(x.id),variantId:String(x.proUID||''),quantity:String(x.quantity)}));
     async function ensureActiveCheckout() {
       const items=itemsForCheckout();
-      if(items.some(x=>!x.variantId))throw new Error('شناسه واقعی تنوع محصول از سرور موجود نیست');
+      if(items.some(x=>!x.variantId))throw Object.assign(new Error(),{code:'CART_ITEM_UNAVAILABLE'});
       const fingerprint=JSON.stringify(items);
       const storageKey=`shop-checkout:${purchaseStorageScope(window.location.hostname,tenantId,isDemoRuntime())}`;
       let existing=null;
@@ -124,13 +124,13 @@ export default function CheckoutClient() {
       if(!existing){existing={fingerprint,key:crypto.randomUUID(),checkoutId:null};sessionStorage.setItem(storageKey,JSON.stringify(existing));}
       startIntent.current=existing;
       let state;
-      if(existing.checkoutId){state=(await getCheckout(existing.checkoutId)).checkout;}
+      if(existing.checkoutId){state=(await getCheckout(existing.checkoutId)).checkout;if(!state)throw Object.assign(new Error(),{code:'CHECKOUT_NOT_FOUND'});}
       else {
         // If start timed out, reuse the same key and body, never create an unrelated reservation.
-        if(existing.fingerprint!==fingerprint)throw new Error('تغییر سبد هنگام نامشخص‌بودن شروع رزرو مجاز نیست؛ ابتدا وضعیت همان درخواست را پیگیری کنید');
+        if(existing.fingerprint!==fingerprint)throw Object.assign(new Error(),{code:'IDEMPOTENCY_CONFLICT'});
         const created=await startCheckout(items,existing.key);
         state=created.checkout;
-        if(!state?.checkoutId)throw new Error('شناسه شروع تسویه از سرور دریافت نشد');
+        if(!state?.checkoutId)throw Object.assign(new Error(),{code:'INVALID_BACKEND_RESPONSE'});
         existing.checkoutId=state.checkoutId;
         sessionStorage.setItem(storageKey,JSON.stringify(existing));
       }
@@ -139,7 +139,7 @@ export default function CheckoutClient() {
       }
       if(state.status==='SUBMITTED'||state.status==='ORDERING'){
         if(state.orderId){setOrderId(state.orderId);setOrderComplete(true)}
-        throw new Error('برای این تسویه قبلاً سفارش پذیرفته شده است؛ همان سفارش را پیگیری کنید');
+        throw Object.assign(new Error(),{code:'ORDER_ALREADY_SUBMITTED'});
       }
       if(state.status==='EXPIRED'||state.status==='CANCELLED'){
         existing={fingerprint,key:crypto.randomUUID(),checkoutId:null};
@@ -151,7 +151,7 @@ export default function CheckoutClient() {
           await new Promise(r=>setTimeout(r,1500));state=(await getCheckout(state.checkoutId)).checkout;
         }
       }
-      if(state.status!=='ACTIVE')throw new Error(state.status==='RESERVING'?'رزرو هنوز آماده نیست؛ دوباره وضعیت همین تسویه را بررسی کنید':`تسویه آماده نیست: ${state.errorCode||state.status}`);
+      if(state.status!=='ACTIVE')throw Object.assign(new Error(),{code:state.errorCode||'CHECKOUT_BUSY'});
       if(existing.fingerprint!==fingerprint){
         // Replace the active reservation atomically: do not start a second checkout.
         const pending=existing.pendingUpdate?.fingerprint===fingerprint
@@ -163,24 +163,23 @@ export default function CheckoutClient() {
         for(let i=0;i<15&&state.status==='RESERVING';i++){
           await new Promise(r=>setTimeout(r,1500));state=(await getCheckout(state.checkoutId)).checkout;
         }
-        if(state.status!=='ACTIVE'||state.errorCode)throw new Error(state.errorCode==='INSUFFICIENT_STOCK'?'موجودی برای سبد جدید کافی نیست؛ رزرو قبلی حفظ شده است':'ویرایش موجودی تکمیل نشده است؛ سبد قبلی همچنان محفوظ می‌ماند');
+        if(state.status!=='ACTIVE'||state.errorCode)throw Object.assign(new Error(),{code:state.errorCode||'CHECKOUT_BUSY'});
         existing.fingerprint=fingerprint;delete existing.pendingUpdate;
         sessionStorage.setItem(storageKey,JSON.stringify(existing));
       }
       setCheckout(state);return state;
     }
     async function getValidAddress() {
-      const shipping=shippingMethods.find(x=>(x.shippingMethodId||x.id)===shippingMethodId);
-      if(!shipping)throw new Error('روش ارسال معتبر را انتخاب کنید');
+      const shipping=shippingMethods.find(x=>x.id===shippingMethodId);
+      if(!shipping)throw Object.assign(new Error(),{code:'SHIPPING_METHOD_REQUIRED'});
       if(shipping.requiresAddress===false)return null;
       if(addressId)return addressId;
-      if(!formData.address.trim())throw new Error('آدرس کامل تحویل را وارد یا از نشانی‌های ذخیره‌شده انتخاب کنید');
-      if(formData.postalCode&&!/^\d{10}$/.test(formData.postalCode))throw new Error('کد پستی باید ده رقم باشد');
+      if(!formData.address.trim())throw Object.assign(new Error(),{code:'ADDRESS_REQUIRED'});
+      if(formData.postalCode&&!/^\d{10}$/.test(formData.postalCode))throw Object.assign(new Error(),{code:'POSTAL_CODE_INVALID'});
       const text=[formData.province,formData.city,formData.address,formData.postalCode?`کد پستی: ${formData.postalCode}`:''].filter(Boolean).join('، ');
-      if(!text.trim())throw new Error('آدرس تحویل را وارد یا انتخاب کنید');
       const created=await createAddress({title:'آدرس تحویل',fullAddress:text,postalCode:formData.postalCode});
       const id=created.addressId||created.id;
-      if(!id)throw new Error('شناسه نشانی از سرور دریافت نشد');
+      if(!id)throw Object.assign(new Error(),{code:'INVALID_BACKEND_RESPONSE'});
       setAddressId(id);
       setSavedAddresses(old=>[...old,created]);
       return id;
@@ -191,23 +190,24 @@ export default function CheckoutClient() {
       const fingerprint=JSON.stringify({checkoutId:active.checkoutId,revision:active.revision,shippingMethodId,addressId:addr});
       if(quoteIntent.current?.fingerprint!==fingerprint)quoteIntent.current={fingerprint,key:crypto.randomUUID()};
       const result=await quoteCheckout(active.checkoutId,shippingMethodId,addr,quoteIntent.current.key);
-      if(!result?.quoteId||!result.totals||!Number.isSafeInteger(result.totals.total)||result.orderSubmissionAvailable!==true||!Number.isFinite(Date.parse(result.expiresAt)))throw new Error('استعلام معتبر یا امکان ثبت سفارش دریافت نشد');
-      const allowed=result.paymentMethods?.some(x=>x.id==='online'&&x.enabled===true);
-      if(!allowed)throw new Error('پرداخت آنلاین این فروشگاه فعال نیست');
-      const inputKey=JSON.stringify([cartFingerprint,shippingMethodId,addr||'',formData.province,formData.city,formData.address,formData.postalCode]);
+      if(!result?.quoteId||!result.totals||!Number.isSafeInteger(result.totals.total)||result.totals.total<0||typeof result.orderSubmissionAvailable!=='boolean'||!Array.isArray(result.paymentMethods)||!Number.isFinite(Date.parse(result.expiresAt)))throw Object.assign(new Error(),{code:'INVALID_BACKEND_RESPONSE'});
+      if(Date.parse(result.expiresAt)<=Date.now())throw Object.assign(new Error(),{code:'QUOTE_EXPIRED'});
+      setPaymentCheck(result);
+      const inputKey=JSON.stringify([cartFingerprint,shippingMethodId,addr||'',formData.province,formData.city,formData.address,formData.postalCode,paymentMethodId]);
       setQuote({...result,...result.totals,shipping:result.totals.shippingAmount,discount:result.totals.discountAmount,tax:result.totals.taxAmount,inputKey});
       return result;
     }
     const nextStep=async()=>{
-      if(operationLock.current)return;
+      if(operationLock.current||methodsLoading||methodsError)return;
       operationLock.current=true;
+      setIsProcessing(true);setSubmitError('');
       try {
-      if(currentStep===1){
-        setIsProcessing(true);setSubmitError('');
-        try{await fetchQuote()}catch(e){if(e.status===401)access.redirectToLogin();else setSubmitError(/[\u0600-\u06ff]/.test(e.message||'')?e.message:'بررسی سبد خرید انجام نشد. کمی بعد دوباره تلاش کنید.');return}finally{setIsProcessing(false)}
-      }
-      setCurrentStep(prev=>Math.min(prev+1,STEPS.length));
-      } finally {operationLock.current=false;}
+        if(currentStep===2&&!paymentMethodId)throw Object.assign(new Error(),{code:paymentOptions.some(method=>method.enabled)?'PAYMENT_METHOD_REQUIRED':'PAYMENT_NOT_CONFIGURED'});
+        const freshQuote=await fetchQuote();
+        if(currentStep===2&&!checkoutPaymentOptions(paymentMethods,freshQuote).some(method=>method.id===paymentMethodId&&method.enabled))throw Object.assign(new Error(),{code:'PAYMENT_NOT_CONFIGURED'});
+        setCurrentStep(prev=>Math.min(prev+1,STEPS.length));
+      } catch(error) {if(error.status===401)access.redirectToLogin();else setSubmitError(customerErrorMessage(error,'quote'));}
+      finally {operationLock.current=false;setIsProcessing(false);}
     };
 
     const prevStep = () => {
@@ -216,11 +216,12 @@ export default function CheckoutClient() {
 
     const handlePlaceOrder=async()=>{
       if(operationLock.current||isProcessing||uncertain||orderId||!quote||!checkout)return;
+      if(!paymentOptions.some(method=>method.id===paymentMethodId&&method.enabled)){setSubmitError(customerErrorMessage({code:'PAYMENT_METHOD_REQUIRED'}));return;}
       if(!Number.isFinite(Date.parse(quote.expiresAt))||Date.parse(quote.expiresAt)<=Date.now()){setQuote(null);setSubmitError('اعتبار استعلام پایان یافته است؛ به مرحله اطلاعات ارسال برگردید و دوباره استعلام بگیرید');return;}
       operationLock.current=true;
       setIsProcessing(true);setSubmitError('');let posting=false;
       try{
-        const payload={checkoutId:checkout.checkoutId,quoteId:quote.quoteId,paymentMethod:'online'};
+        const payload={checkoutId:checkout.checkoutId,quoteId:quote.quoteId,paymentMethod:paymentMethodId};
         const fingerprint=JSON.stringify(payload);
         const purchaseScope=purchaseStorageScope(window.location.hostname,tenantId,isDemoRuntime());
         const intentKey=`shop-order-intent:${purchaseScope}`;
@@ -242,7 +243,7 @@ export default function CheckoutClient() {
           const link=new URL(order.paymentUrl);
           if(link.protocol==='https:')window.location.assign(link.href);
         }
-      }catch(e){if(posting&&(!e.status||e.status>=500))setUncertain(true);if(e.status===401)access.redirectToLogin();else setSubmitError(/[\u0600-\u06ff]/.test(e.message||'')?e.message:'نتیجه ثبت سفارش مشخص نشد. پیش از تلاش دوباره، وضعیت سفارش‌ها را بررسی کنید.');}
+      }catch(e){if(posting&&(!e.status||e.status>=500))setUncertain(true);if(e.status===401)access.redirectToLogin();else setSubmitError(customerErrorMessage(e,'order'));}
       finally{setIsProcessing(false);operationLock.current=false}
     };
 
@@ -280,6 +281,7 @@ export default function CheckoutClient() {
         <div className="w-full max-w-6xl mx-auto py-8 px-4 grid grid-cols-1 lg:grid-cols-12 gap-8 relative items-start">
 
             {submitError && <div role="alert" className="col-span-12 text-red-600 p-3 bg-red-50 rounded-xl">{submitError}{uncertain && <p>پاسخ سرور نامشخص است؛ تا بررسی سفارش‌ها یا تماس با فروشگاه، ثبت مجدد غیرفعال است.</p>}</div>}
+            {methodsError && <div role="alert" className="col-span-12 text-rose-700 bg-rose-50 p-4 rounded-xl"><p>{methodsError}</p><button type="button" onClick={retryMethods} className="underline mt-3">دریافت دوباره روش‌های خرید</button></div>}
             {methodsLoading&&<p role="status" className="col-span-12 text-gray-500">در حال دریافت روش‌های ارسال و نشانی‌ها...</p>}
             {/* Steps Progress (Mobile & Desktop) */}
             <div className="col-span-12 mb-4">
@@ -330,13 +332,13 @@ export default function CheckoutClient() {
                                     <MapPin className="text-primary" />
                                     اطلاعات گیرنده و آدرس
                                 </h2>
-                                <label className="block text-sm">روش ارسال
-                                  <select className="block w-full border rounded-xl p-3 mt-2" value={shippingMethodId} onChange={e=>{setShippingMethodId(e.target.value);setQuote(null)}}>
-                                    <option value="">انتخاب روش ارسال</option>
-                                    {shippingMethods.map(m=><option key={m.shippingMethodId||m.id} value={m.shippingMethodId||m.id}>{m.name||m.title} ({formatMoney(m.amount,'TOMAN')})</option>)}
-                                  </select>
-                                </label>
-                                {!!savedAddresses.length&&<label className="block text-sm">نشانی ذخیره‌شده
+                                {!methodsLoading && <CheckoutMethodChoices title="روش ارسال" name="shipping-method" selectedId={shippingMethodId}
+                                  options={shippingMethods.map(method=>({...method,enabled:true,detail:method.amount==null?'هزینه ارسال هنگام بررسی سبد مشخص می‌شود.':formatMoney(method.amount,method.currency)}))}
+                                  onChange={id=>{setShippingMethodId(id);setAddressId('');setQuote(null);setSubmitError('');}}
+                                  emptyMessage="روش ارسالی برای این فروشگاه در دسترس نیست. برای ادامه خرید با پشتیبانی فروشگاه تماس بگیرید."/>}
+                                {!methodsLoading&&<button type="button" onClick={retryMethods} className="text-primary text-sm underline self-start">به‌روزرسانی روش‌های خرید</button>}
+                                {selectedShipping?.requiresAddress===false&&<p className="text-sm text-gray-500 bg-gray-50 p-3 rounded-xl">برای این روش ارسال، وارد کردن نشانی لازم نیست.</p>}
+                                {!!savedAddresses.length&&selectedShipping?.requiresAddress!==false&&<label className="block text-sm">نشانی ذخیره‌شده
                                   <select className="block w-full border rounded-xl p-3 mt-2" value={addressId} onChange={e=>setAddressId(e.target.value)}>
                                     <option value="">نشانی جدید از فرم پایین</option>
                                     {savedAddresses.map(a=><option value={a.addressId||a.id} key={a.addressId||a.id}>{a.title||a.fullAddress}</option>)}
@@ -367,7 +369,7 @@ export default function CheckoutClient() {
                                             placeholder="0912..."
                                         />
                                     </div>
-                                    <div className="flex flex-col gap-2">
+                                    <div className={`flex flex-col gap-2 ${selectedShipping?.requiresAddress===false?'hidden':''}`}>
                                         <label className="text-sm font-medium text-gray-700">استان</label>
                                         <input
                                             name="province"
@@ -376,7 +378,7 @@ export default function CheckoutClient() {
                                             className="px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
                                         />
                                     </div>
-                                    <div className="flex flex-col gap-2">
+                                    <div className={`flex flex-col gap-2 ${selectedShipping?.requiresAddress===false?'hidden':''}`}>
                                         <label className="text-sm font-medium text-gray-700">شهر</label>
                                         <input
                                             name="city"
@@ -385,7 +387,7 @@ export default function CheckoutClient() {
                                             className="px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
                                         />
                                     </div>
-                                    <div className="col-span-1 md:col-span-2 flex flex-col gap-2">
+                                    <div className={`col-span-1 md:col-span-2 flex flex-col gap-2 ${selectedShipping?.requiresAddress===false?'hidden':''}`}>
                                         <label className="text-sm font-medium text-gray-700">آدرس پستی دقیق <span className="text-red-500">*</span></label>
                                         <textarea
                                             name="address"
@@ -395,7 +397,7 @@ export default function CheckoutClient() {
                                             placeholder="خیابان، کوچه، پلاک، واحد..."
                                         />
                                     </div>
-                                    <div className="flex flex-col gap-2">
+                                    <div className={`flex flex-col gap-2 ${selectedShipping?.requiresAddress===false?'hidden':''}`}>
                                         <label className="text-sm font-medium text-gray-700">کد پستی</label>
                                         <input
                                             name="postalCode"
@@ -422,26 +424,11 @@ export default function CheckoutClient() {
                                     انتخاب روش پرداخت
                                 </h2>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div
-                                        onClick={() => quote?.paymentMethods?.some(x=>x.id==='online'&&x.enabled===true) && setFormData(prev => ({ ...prev, paymentMethod: 'online' }))}
-                                        className={`cursor-pointer rounded-2xl border-2 p-4 flex items-center gap-4 transition-all ${!quote?.paymentMethods?.some(x=>x.id==='online'&&x.enabled===true) ? 'opacity-40 cursor-not-allowed' : ''} ${formData.paymentMethod === 'online' ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200'}`}
-                                    >
-                                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${formData.paymentMethod === 'online' ? 'border-primary' : 'border-gray-300'}`}>
-                                            {formData.paymentMethod === 'online' && <div className="w-3 h-3 rounded-full bg-primary" />}
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="font-bold text-gray-800">پرداخت اینترنتی</span>
-                                            <span className="text-xs text-gray-500">پرداخت با کلیه کارت‌های عضو شتاب</span>
-                                        </div>
-                                        <ShieldCheck className="mr-auto text-primary opacity-50" />
-                                    </div>
-
-                                </div>
-
-                                <div className="bg-blue-50 text-blue-700 p-4 rounded-xl text-sm leading-relaxed border border-blue-100">
-                                    کاربر گرامی، با انتخاب پرداخت اینترنتی، سفارش شما در اولویت پردازش قرار می‌گیرد و فرآیند ارسال سریع‌تر انجام خواهد شد.
-                                </div>
+                                <CheckoutMethodChoices title="روش‌های پرداخت فروشگاه" name="payment-method" options={paymentOptions} selectedId={paymentMethodId}
+                                  onChange={id=>{setPaymentMethodId(id);setQuote(null);setSubmitError('');}}
+                                  emptyMessage="روش پرداختی برای این فروشگاه در دسترس نیست. لطفاً با پشتیبانی فروشگاه تماس بگیرید."/>
+                                <button type="button" onClick={retryMethods} className="text-primary text-sm underline self-start">به‌روزرسانی روش‌های خرید</button>
+                                <p className="bg-gray-50 text-gray-600 p-4 rounded-xl text-sm leading-relaxed">روش پرداخت و مبلغ سفارش پیش از ثبت نهایی دوباره بررسی می‌شوند.</p>
                             </motion.div>
                         )}
 
@@ -465,7 +452,9 @@ export default function CheckoutClient() {
                                     </div>
                                     <div className="text-sm text-gray-600 space-y-1">
                                         <p>{formData.name} - {toPersianDigits(formData.phone)}</p>
-                                        <p>{addressId?(savedAddresses.find(address=>String(address.addressId||address.id)===String(addressId))?.fullAddress||'نشانی انتخاب‌شده'): [formData.province,formData.city,formData.address,formData.postalCode].filter(Boolean).join('، ')}</p>
+                                        <p>روش ارسال: {selectedShipping?.name}</p>
+                                        <p>{selectedShipping?.requiresAddress===false?'دریافت سفارش طبق روش ارسال انتخاب‌شده':addressId?(savedAddresses.find(address=>String(address.addressId||address.id)===String(addressId))?.fullAddress||'نشانی انتخاب‌شده'): [formData.province,formData.city,formData.address,formData.postalCode].filter(Boolean).join('، ')}</p>
+                                        <p>روش پرداخت: {paymentOptions.find(method=>method.id===paymentMethodId)?.name}</p>
                                     </div>
                                 </div>
 
@@ -502,7 +491,7 @@ export default function CheckoutClient() {
                         {currentStep < 3 ? (
                             <button
                                 onClick={nextStep}
-                                disabled={isProcessing}
+                                disabled={isProcessing || methodsLoading || !!methodsError || shippingMethods.length===0}
                                 className="flex items-center gap-2 px-8 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition shadow-lg shadow-primary/30 font-bold disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                                 {isProcessing ? 'در حال بررسی سبد...' : 'مرحله بعد'} <ChevronLeft size={18} />
@@ -510,7 +499,7 @@ export default function CheckoutClient() {
                         ) : (
                             <button
                                 onClick={handlePlaceOrder}
-                                disabled={isProcessing || uncertain || !!orderId || !quote}
+                                disabled={isProcessing || uncertain || !!orderId || !quote || !paymentOptions.some(method=>method.id===paymentMethodId&&method.enabled)}
                                 className="flex items-center gap-2 px-8 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-600/30 font-bold disabled:opacity-70 disabled:cursor-not-allowed"
                             >
                                 {isProcessing ? "در حال پردازش..." : "پرداخت و ثبت نهایی"}

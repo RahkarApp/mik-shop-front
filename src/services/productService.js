@@ -1,4 +1,5 @@
 import {api} from './api';
+import {buildCategoryTree} from '@/utils/categories';
 const enc=value=>encodeURIComponent(String(value));
 export async function getProducts(options={}, tenantId){
  const {page=1,limit=20,query='',category='',sort='',minPrice='',maxPrice='',availableOnly=''}=options;
@@ -49,13 +50,16 @@ export async function getProductInventory(id,tenantId){
 export const getBanners=tenantId=>api('/banners',{tenantId});
 export async function getCategories(tenantId,host){
  let cursor=null,all=[];
+ const seen=new Set();
  for(let page=0;page<100;page++){
   const query=new URLSearchParams({limit:'50'});
   if(cursor)query.set('after',cursor);
   const response=await api(`/categories?${query}`,{tenantId,host});
   all.push(...(Array.isArray(response)?response:response?.items||[]));
   cursor=response?.nextCursor;
-  if(!cursor)return all;
+  if(!cursor)return buildCategoryTree(all);
+  if(seen.has(cursor))throw Object.assign(new Error('صفحه‌بندی دسته‌بندی‌ها کامل نشد'),{code:'INVALID_BACKEND_RESPONSE'});
+  seen.add(cursor);
  }
  throw new Error('تعداد صفحه‌های دسته‌بندی بیش از حد است');
 }

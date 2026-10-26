@@ -93,7 +93,7 @@ async function demo(path, { method, body, tenantId, idempotencyKey }) {
   if (method === 'GET' && pathname === '/orders') return demoState(tenantId).orders;
   if (method === 'GET' && pathname.startsWith('/orders/')) return demoState(tenantId).orders.find((o) => String(o.id) === decodeURIComponent(pathname.split('/')[2])) || null;
   if (method === 'GET' && pathname === '/me') return demoState(tenantId).profile;
-  if (method === 'GET' && pathname === '/shop-methods') return {shippingMethods:[{id:'demo-delivery',shippingMethodId:'demo-delivery',name:'پیک نمونه',amount:15000,requiresAddress:true},{id:'demo-pickup',shippingMethodId:'demo-pickup',name:'تحویل حضوری',amount:0,requiresAddress:false}],paymentMethods:[{id:'online',enabled:true}]};
+  if (method === 'GET' && pathname === '/shop-methods') return {shippingMethods:[{id:'demo-delivery',shippingMethodId:'demo-delivery',name:'پیک نمونه',amount:15000,currency:'TOMAN',active:true,requiresAddress:true},{id:'demo-pickup',shippingMethodId:'demo-pickup',name:'تحویل حضوری',amount:0,currency:'TOMAN',active:true,requiresAddress:false}],paymentMethods:[{id:'online',name:'پرداخت آنلاین آزمایشی',enabled:true}]};
   if (method === 'PATCH' && pathname === '/me') return Object.assign(demoState(tenantId).profile, body);
   if (method === 'GET' && pathname === '/addresses') return demoState(tenantId).addresses;
   if (method === 'POST' && pathname === '/addresses') { const a = { ...body, id: String(Date.now()) }; demoState(tenantId).addresses.push(a); return a; }

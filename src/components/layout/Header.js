@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { Search, User, ShoppingCart, Heart, Wallet } from "lucide-react";
 import SearchModal from "../shared/SearchModal";
 import { useCart } from "@/components/shared/CartContext";
+import CartBadge from '@/components/shared/CartBadge';
 import { useSiteConfig } from "@/hooks/useSiteConfig";
 import { useFeatures } from "@/hooks/useFeatures";
 
@@ -146,14 +147,7 @@ export default function Header({ variant = "a" }) {
               aria-label="سبد خرید"
             >
               <ShoppingCart className="w-6 h-6" />
-              {cartItemCount > 0 && (
-                <span
-                  suppressHydrationWarning
-                  className="absolute -top-1 -right-1 flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full shadow-sm ring-2 ring-white"
-                >
-                  {toPersianDigits(cartItemCount)}
-                </span>
-              )}
+              <CartBadge count={cartItemCount}/>
             </Link>
 
             {/* variant B: دکمه جستجوی موبایل/دسکتاپ */}

@@ -8,7 +8,7 @@ import CategoriesRenderer from '@/components/ui/categories/CategoriesRenderer';
 import { useCategories } from '@/hooks/useCategories';
 
 export default function CategoriesSection() {
-  const { categories, loading, error } = useCategories();
+  const { categories, loading, error, retry } = useCategories();
 
   if (loading) {
     return (
@@ -21,7 +21,7 @@ export default function CategoriesSection() {
   }
 
   if (error) {
-    return <div className="p-4 text-sm text-red-600 bg-red-50 rounded-lg">{error}</div>;
+    return <div role="alert" className="p-4 text-sm text-red-600 bg-red-50 rounded-lg"><p>{error}</p><button type="button" onClick={retry} className="underline mt-3">تلاش دوباره</button></div>;
   }
 
   return (

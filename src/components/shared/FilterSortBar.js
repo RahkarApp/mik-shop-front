@@ -15,7 +15,7 @@ const SORT_OPTIONS = [
 ];
 
 
-export default function FilterSortBar() {
+export default function FilterSortBar({onOpenCategoryModal}) {
   const router=useRouter(),pathname=usePathname(),searchParams=useSearchParams();
   const supportsFilters=process.env.NEXT_PUBLIC_DATA_MODE==='demo'||isDemoPath(pathname);
   const changeSort=(value)=>{const p=new URLSearchParams(searchParams.toString());p.set('sort',value);p.delete('page');router.push(demoHref(`${pathname}?${p}`))};
@@ -28,6 +28,7 @@ export default function FilterSortBar() {
     <div className="w-full flex flex-col justify-center items-center">
       {/* دسته‌بندی، فیلتر و سورت */}
       <div className="w-full flex justify-start items-center p-1 gap-4">
+        {onOpenCategoryModal && <button type="button" onClick={onOpenCategoryModal} className="md:hidden px-3 py-2 bg-white rounded-lg border text-sm">دسته‌بندی‌ها</button>}
         {/* دکمه فیلتر */}
         <button type="button"
           className="px-2 py-1 flex md:hidden bg-white rounded-lg border border-text-primary cursor-pointer hover:bg-gray-100 transition-colors"

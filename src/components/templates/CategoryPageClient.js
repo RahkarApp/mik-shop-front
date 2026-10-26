@@ -9,6 +9,8 @@ import ProductCardRenderer from '@/components/ui/product-cards/ProductCardRender
 import FilterSortBar from '@/components/shared/FilterSortBar';
 import FilterSidebar from '@/components/shared/FilterSidebar';
 import { useProducts } from '@/hooks/useProducts';
+import {useCategories} from '@/hooks/useCategories';
+import {findCategoryPath} from '@/utils/categories';
 import {useSearchParams} from 'next/navigation';
 import Link from '@/components/PreviewLink';
 import { useComponentVariant } from '@/hooks/useComponentVariant';
@@ -16,8 +18,11 @@ import { PRODUCT_CARD_C } from '@/constants/config';
 
 export default function CategoryPageClient({ categoryId, categoryName }) {
   const params=useSearchParams();
+  const {categories} = useCategories();
+  const categoryPath = findCategoryPath(categories,categoryId);
+  const displayName = categoryPath.at(-1)?.name || (categoryName !== categoryId ? categoryName : 'دسته‌بندی');
   const page=Math.max(1,Number(params.get('page'))||1);
-  const { products, loading, error, hasNextPage } = useProducts({ category: categoryId, page, limit: 50,sort:params.get('sort')||'newest',minPrice:params.get('minPrice')||'',maxPrice:params.get('maxPrice')||'',availableOnly:params.get('availableOnly')||'' });
+  const { products, loading, error, hasNextPage, retry } = useProducts({ category: categoryId, page, limit: 50,sort:params.get('sort')||'newest',minPrice:params.get('minPrice')||'',maxPrice:params.get('maxPrice')||'',availableOnly:params.get('availableOnly')||'' });
   const pageHref=number=>{const next=new URLSearchParams(params.toString());next.set('page',String(number));return `/category/${encodeURIComponent(categoryId)}?${next}`;};
   const cardVariant = useComponentVariant('productCard');
 
@@ -34,8 +39,9 @@ export default function CategoryPageClient({ categoryId, categoryName }) {
         </div>
         <div className="w-full md:w-[70%] md:px-2">
           <h1 className="w-full text-right my-6 font-bold text-gray-800">
-            محصولات دسته‌بندی: {categoryName}
+            محصولات دسته‌بندی: {displayName}
           </h1>
+          {categoryPath.length > 0 && <nav aria-label="مسیر دسته‌بندی" className="flex flex-wrap gap-2 text-sm text-gray-500 mb-4"><Link href="/">فروشگاه</Link>{categoryPath.map((category,index) => <span key={category.id} className="flex gap-2"><span aria-hidden="true">/</span>{index === categoryPath.length-1 ? <span aria-current="page">{category.name}</span> : <Link className="text-primary" href={`/category/${encodeURIComponent(category.id)}`}>{category.name}</Link>}</span>)}</nav>}
           <FilterSortBar />
 
           {loading && (
@@ -47,7 +53,7 @@ export default function CategoryPageClient({ categoryId, categoryName }) {
           )}
 
           {error && (
-            <div className="p-4 m-4 text-red-600 bg-red-50 rounded-lg text-sm">{error}</div>
+            <div role="alert" className="p-4 m-4 text-red-600 bg-red-50 rounded-lg text-sm"><p>{error}</p><button type="button" onClick={retry} className="underline mt-3">تلاش دوباره</button></div>
           )}
 
           {!loading && !error && (

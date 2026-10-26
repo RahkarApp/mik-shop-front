@@ -1,6 +1,7 @@
 /** دامنه سفارش و حساب؛ تمام شبکه از api.js می‌گذرد. */
 import { api, clearAccessToken } from './api';
 import {authErrorMessage,isOtpRateLimited} from '@/utils/auth';
+import {normalizeCheckoutMethods} from '@/utils/checkoutMethods';
 const pathId = (id) => encodeURIComponent(id);
 export const getOrders = (tenantId, token) => api('/orders', {tenantId, token});
 export const getOrder = (id, tenantId, token) => api(`/orders/${pathId(id)}`, {tenantId, token});
@@ -40,7 +41,7 @@ export async function verifyOtp(challengeId, code, tenantId) {
  try {return await api('/auth/otp/verify',{method:'POST',body:{challengeId,code},tenantId});}
  catch(error) {error.rateLimited=isOtpRateLimited(error);error.message=authErrorMessage(error,'verify');throw error;}
 }
-export const getShopMethods=(tenantId)=>api('/shop-methods',{tenantId});
+export const getShopMethods=async(tenantId)=>normalizeCheckoutMethods(await api('/shop-methods',{tenantId}));
 export const startCheckout=(items,tenantId,key)=>api('/checkout/start',{method:'POST',body:{items},tenantId,idempotencyKey:key});
 export const getCheckout=(id,tenantId)=>api(`/checkout/${pathId(id)}`,{tenantId});
 export const updateCheckoutItems=(id,items,revision,tenantId,key)=>api(`/checkout/${pathId(id)}/items`,{method:'PUT',body:{expectedRevision:revision,items},tenantId,idempotencyKey:key});
