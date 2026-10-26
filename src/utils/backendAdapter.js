@@ -94,12 +94,13 @@ export function adaptResponse(path, method, response) {
   if (pathname === '/auth/otp/request' && method === 'POST') return payload;
   if (pathname === '/auth/otp/verify' && method === 'POST') return payload;
   if (pathname === '/orders' && method === 'GET') { const list=Array.isArray(payload)?payload:payload?.items; return Array.isArray(list) ? list.map(adaptOrder) : payload; }
-  if (/^\/orders\/[^/]+$/.test(pathname) && method === 'GET') return adaptOrder(payload);
+  if (/^\/orders\/[^/]+$/.test(pathname) && method === 'GET') return adaptOrder(payload?.order ?? payload);
   return payload;
 }
 export function adaptOrder(order) {
   if (!order) return null;
-  const items = order.items && !Array.isArray(order.items) ? Object.entries(order.items).flatMap(([productId, group]) => (Array.isArray(group) ? group : [group]).map(x => ({...x, productId, quantity:x.qty ?? x.quantity}))) : (order.items || []);
+  const sourceItems = order.items ?? order.lines ?? [];
+  const items = sourceItems && !Array.isArray(sourceItems) ? Object.entries(sourceItems).flatMap(([productId, group]) => (Array.isArray(group) ? group : [group]).map(x => ({...x, productId, quantity:x.qty ?? x.quantity}))) : sourceItems;
   return {...order, id: order.id || order.orderId || order.uid, items, date:order.date || order.createdAt,
     status: Array.isArray(order.status) ? order.status.at(-1)?.status : order.status,
     processingStatus:order.processingStatus, paymentStatus:order.paymentStatus,deliveryStatus:order.deliveryStatus,

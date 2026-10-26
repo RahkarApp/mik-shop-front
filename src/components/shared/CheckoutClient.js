@@ -6,8 +6,10 @@ import React, { useState, useRef, useEffect } from "react";
 import {useShopActions} from '@/hooks/useShopActions';
 import {useCheckoutAccess} from '@/hooks/useCheckoutAccess';
 import {useCheckoutMethods} from '@/hooks/useCheckoutMethods';
+import {useOrders} from '@/hooks/useOrders';
 import {checkoutPaymentOptions} from '@/utils/checkoutMethods';
 import {customerErrorMessage} from '@/utils/customerError';
+import {paymentHref} from '@/utils/orderPayment';
 import CheckoutMethodChoices from './CheckoutMethodChoices';
 import { useSiteConfig } from "@/hooks/useSiteConfig";
 import {formatMoney,normalizeDigits} from '@/utils/format';
@@ -62,6 +64,8 @@ export default function CheckoutClient() {
     },[access.profile]);
 
     const [orderId, setOrderId] = useState(null);
+    const orderStatus=useOrders(orderId||undefined,Boolean(orderId));
+    const gatewayHref=paymentHref(orderStatus.data);
     const [submitError,setSubmitError]=useState('');
     const idempotencyRef = useRef(null);
     const [uncertain, setUncertain] = useState(false);
@@ -78,7 +82,13 @@ export default function CheckoutClient() {
     const [orderComplete, setOrderComplete] = useState(false);
     const operationLock = useRef(false);
     const mounted = useRef(true);
+    const redirectAttempted = useRef('');
     useEffect(()=>{mounted.current=true;return()=>{mounted.current=false}},[]);
+    useEffect(()=>{
+      if(!orderComplete||!gatewayHref||redirectAttempted.current===gatewayHref)return;
+      redirectAttempted.current=gatewayHref;
+      try {window.location.assign(gatewayHref);} catch { /* The visible payment button remains available. */ }
+    },[gatewayHref,orderComplete]);
     // Address or cart changes invalidate the visible price. Only a fresh server quote can be submitted.
     const cartFingerprint=JSON.stringify(cart.map(item=>[item.cartItemId,item.proUID,item.quantity]));
     const selectedShipping=shippingMethods.find(method=>method.id===shippingMethodId);
@@ -239,10 +249,6 @@ export default function CheckoutClient() {
         if(!mounted.current)return;
         setOrderId(id);dispatch({type:'CLEAR_CART'});setOrderComplete(true);
         sessionStorage.removeItem(`shop-checkout:${purchaseScope}`);
-        if(order.paymentUrl&&(!order.paymentExpiresAt||Date.parse(order.paymentExpiresAt)>Date.now())){
-          const link=new URL(order.paymentUrl);
-          if(link.protocol==='https:')window.location.assign(link.href);
-        }
       }catch(e){if(posting&&(!e.status||e.status>=500))setUncertain(true);if(e.status===401)access.redirectToLogin();else setSubmitError(customerErrorMessage(e,'order'));}
       finally{setIsProcessing(false);operationLock.current=false}
     };
@@ -257,9 +263,18 @@ export default function CheckoutClient() {
                 >
                     <CheckCircle size={48} />
                 </motion.div>
-                <h1 className="text-2xl font-bold text-gray-800 mb-2">سفارش شما ثبت شد؛ وضعیت پرداخت را از پیگیری سفارش بررسی کنید</h1>
-                <p className="text-gray-600 mb-8">شماره سفارش: {toPersianDigits(orderId)}</p>
-                <div className="flex gap-4">
+                <h1 className="text-2xl font-bold text-gray-800 mb-2">سفارش شما ثبت شد</h1>
+                <p className="text-gray-600">شماره سفارش: {toPersianDigits(orderId)}</p>
+                {orderStatus.loading&&<p role="status" className="text-gray-600 mt-4">در حال آماده‌سازی لینک پرداخت...</p>}
+                {!orderStatus.loading&&orderStatus.data?.processingStatus==='PROCESSING'&&<p role="status" className="text-gray-600 mt-4">سفارش ثبت شده و لینک پرداخت هنوز در حال آماده‌سازی است.</p>}
+                {orderStatus.data?.paymentState==='PAID'&&orderStatus.data?.processingStatus!=='CONFIRMED'&&<p role="status" className="text-amber-700 mt-4">پرداخت دریافت شده و ثبت نهایی آن در حال انجام است؛ دوباره پرداخت نکنید.</p>}
+                {orderStatus.data?.processingStatus==='CONFIRMED'&&<p role="status" className="text-green-700 mt-4">پرداخت و ثبت سفارش توسط فروشگاه تأیید شد.</p>}
+                {orderStatus.data?.processingStatus==='CANCELLED'&&<p role="alert" className="text-red-700 mt-4">این سفارش لغو شده است؛ برای بررسی بیشتر با فروشگاه تماس بگیرید.</p>}
+                {orderStatus.data?.processingStatus==='ACTION_REQUIRED'&&<p role="alert" className="text-amber-700 mt-4">این سفارش نیازمند پیگیری فروشگاه است؛ سفارش یا پرداخت تازه ایجاد نکنید.</p>}
+                {orderStatus.error&&<div role="alert" className="text-red-700 mt-4"><p>{orderStatus.error} سفارش شما ثبت شده و از بین نرفته است.</p><button type="button" onClick={orderStatus.retry} className="underline mt-2">استعلام دوباره لینک پرداخت</button></div>}
+                {orderStatus.data?.paymentUrl&&!gatewayHref&&orderStatus.data?.paymentState!=='PAID'&&<div role="alert" className="text-red-700 mt-4"><p>لینک پرداخت دریافتی معتبر یا قابل استفاده نیست. سفارش ثبت شده است.</p><button type="button" onClick={orderStatus.retry} className="underline mt-2">دریافت دوباره وضعیت سفارش</button></div>}
+                {gatewayHref&&<div className="mt-5"><p role="status" className="text-gray-600 mb-3">در حال انتقال به درگاه پرداخت... اگر انتقال انجام نشد، دکمه زیر را بزنید.</p><a href={gatewayHref} className="inline-block px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition">پرداخت سفارش</a></div>}
+                <div className="flex flex-wrap justify-center gap-4 mt-8">
                     <Link
                         href={`/orders/${encodeURIComponent(orderId)}`}
                         className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition"

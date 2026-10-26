@@ -5,6 +5,7 @@ const rules=['AGENTS.md','rules/10-web-storefront-project.mdc','rules/20-refacto
 const failures=[];const fail=(msg)=>failures.push(msg);
 for(const x of rules)if(!existsSync(join(ROOT,x)))fail('Missing required rule: '+x);
 if(!existsSync(join(ROOT,'src/app/demo/page.js')))fail('Missing /demo route');
+if(existsSync(join(ROOT,'src/middleware.js'))&&existsSync(join(ROOT,'src/proxy.js')))fail('Next.js accepts src/proxy.js only; remove the legacy src/middleware.js');
 if(!readFileSync(join(ROOT,'src/services/api.js'),'utf8').includes("process.env.NEXT_PUBLIC_DATA_MODE === 'demo'")&&!readFileSync(join(ROOT,'src/services/api.js'),'utf8').includes("process.env.NEXT_PUBLIC_DATA_MODE==='demo'"))fail('Demo must remain environment-controlled');
 const src=join(ROOT,'src');let jsFiles=0;
 function visit(dir){for(const entry of readdirSync(dir,{withFileTypes:true})){const p=join(dir,entry.name);if(entry.isDirectory()){visit(p);continue;}if(!p.endsWith('.js')&&!p.endsWith('.mjs'))continue;jsFiles++;

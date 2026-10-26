@@ -11,6 +11,7 @@ import {normalizeCheckoutMethods, checkoutPaymentOptions} from '../src/utils/che
 import {customerErrorMessage} from '../src/utils/customerError.js';
 import * as format from '../src/utils/format.js';
 import * as cartUtils from '../src/utils/cart.js';
+import {paymentHref} from '../src/utils/orderPayment.js';
 
 const require = createRequire(import.meta.url);
 const {transformSync} = require('next/dist/build/swc');
@@ -124,6 +125,7 @@ function checkoutHarness({revokePayment=false} = {}) {
   // The compiled component receives these browser objects through its VM, not the real browser.
   const overrides={'react':hooks,'framer-motion':{motion:{div:'div'},AnimatePresence:props=>props.children},'@/utils/demoRoute':{isDemoRuntime:()=>true},
     '@/hooks/useShopActions':{useShopActions:()=>actions},'@/hooks/useCheckoutAccess':{useCheckoutAccess:()=>({status:'allowed',profile})},
+    '@/hooks/useOrders':{useOrders:()=>({data:null,loading:false,error:'',retry:()=>{}})},'@/utils/orderPayment':{paymentHref},
     '@/hooks/useCheckoutMethods':{useCheckoutMethods:()=>({...methods,loading:false,error:''})},'@/utils/checkoutMethods':{checkoutPaymentOptions},
     '@/utils/customerError':{customerErrorMessage},'./CheckoutMethodChoices':Choices,'@/hooks/useSiteConfig':{useSiteConfig:()=>({config:{currency:'TOMAN'},tenantId:'store',loading:false})},
     '@/utils/format':format,'@/utils/cart':cartUtils,'@/components/shared/CartContext':{useCart:()=>({cart:[{id:'product',proUID:'sku',cartItemId:'item',quantity:1,price:100}],ready:true,dispatch:()=>{}})},

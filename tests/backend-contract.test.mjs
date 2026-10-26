@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {backendRoute} from '../src/utils/backendRoutes.js';
 import {adaptStore,adaptProduct,adaptOrder,adaptResponse} from '../src/utils/backendAdapter.js';
+import {paymentHref,orderNeedsPolling} from '../src/utils/orderPayment.js';
 
 test('existing mik-shop routes are mapped exactly; unsafe order create is not used',()=>{
  assert.equal(backendRoute('/products?query=شال&limit=10'),'/product?limit=10&search=%D8%B4%D8%A7%D9%84');
@@ -51,6 +52,24 @@ test('known list and invoice envelopes are adapted without inventing totals',()=
  assert.equal(order.summary.total,null);
  assert.equal(adaptOrder({orderId:'new-order',totals:{total:450000}}).summary.total,450000);
  assert.throws(()=>adaptResponse('/categories','GET',{status:false,message:'failed'}),/failed/);
+});
+
+test('order detail envelope exposes the real payment fields and lines',()=>{
+ const result=adaptResponse('/orders/order-1','GET',{status:true,data:{order:{orderId:'order-1',processingStatus:'AWAITING_PAYMENT',paymentState:'PENDING',paymentRequired:true,paymentUrl:'https://pay.example/start',paymentExpiresAt:'2030-01-01T00:00:00.000Z',lines:[{productId:'p1',quantity:'2'}],totals:{total:250000}}}});
+ assert.equal(result.id,'order-1');assert.equal(result.paymentState,'PENDING');assert.equal(result.items[0].productId,'p1');assert.equal(result.summary.total,250000);
+});
+
+test('only an active HTTPS backend payment link is usable and pending orders are polled',()=>{
+ const now=Date.parse('2026-10-26T10:00:00.000Z');
+ const pending={processingStatus:'AWAITING_PAYMENT',paymentState:'PENDING',paymentRequired:true,paymentUrl:'https://pay.example/start',paymentExpiresAt:'2026-10-26T10:15:00.000Z'};
+ assert.equal(paymentHref(pending,now),'https://pay.example/start');
+ assert.equal(paymentHref({...pending,paymentUrl:'http://pay.example/start'},now),'');
+ assert.equal(paymentHref({...pending,paymentExpiresAt:'2026-10-26T09:59:59.000Z'},now),'');
+ assert.equal(orderNeedsPolling({processingStatus:'PROCESSING'},now),true);
+ assert.equal(orderNeedsPolling({...pending,paymentUrl:null},now),true);
+ assert.equal(orderNeedsPolling(pending,now),false);
+ assert.equal(orderNeedsPolling({...pending,paymentState:'PAID',paymentUrl:null},now),true);
+ assert.equal(orderNeedsPolling({...pending,processingStatus:'CONFIRMED',paymentState:'PAID'},now),false);
 });
 
 test('single variant keeps SKU selection requirement; missing id is not invented',()=>{
