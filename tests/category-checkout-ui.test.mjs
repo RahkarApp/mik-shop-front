@@ -12,6 +12,7 @@ import {customerErrorMessage} from '../src/utils/customerError.js';
 import * as format from '../src/utils/format.js';
 import * as cartUtils from '../src/utils/cart.js';
 import {paymentHref} from '../src/utils/orderPayment.js';
+import iranProvinces from '../src/data/iranProvinces.js';
 
 const require = createRequire(import.meta.url);
 const {transformSync} = require('next/dist/build/swc');
@@ -72,6 +73,17 @@ test('shop methods preserve backend labels and zero amounts, and do not enable m
   assert.throws(()=>normalizeCheckoutMethods({...methodsPayload,shippingMethods:[{shippingMethodId:'bad',name:'ناقص',amount:null,currency:'TOMAN',active:true,requiresAddress:true}]}),{code:'INVALID_BACKEND_RESPONSE'});
   assert.throws(()=>normalizeCheckoutMethods({...methodsPayload,paymentMethods:[{id:'online',name:'پرداخت',enabled:'true'}]}),{code:'INVALID_BACKEND_RESPONSE'});
 });
+test('the supplied Iran location data has complete provinces, city labels and unique identifiers',()=>{
+  assert.equal(iranProvinces.length,31);
+  assert.equal(iranProvinces.reduce((count,province)=>count+province.cities.length,0),1243);
+  assert.equal(new Set(iranProvinces.map(province=>province.id)).size,iranProvinces.length);
+  assert.equal(new Set(iranProvinces.map(province=>province.name)).size,iranProvinces.length);
+  for(const province of iranProvinces) {
+    assert.ok(province.name&&province.cities.length>0);
+    assert.equal(new Set(province.cities.map(city=>city.id)).size,province.cities.length);
+    assert.ok(province.cities.every(city=>city.name));
+  }
+});
 test('payment must be enabled by the backend and the latest Quote; COD is never invented',()=>{
   const list=[...methodsPayload.paymentMethods,{id:'cod',name:'روش دیگر',enabled:true}];
   const available=checkoutPaymentOptions(list,{paymentMethods:[{id:'online',enabled:true}],orderSubmissionAvailable:true});
@@ -130,7 +142,7 @@ function checkoutHarness({revokePayment=false,mismatchShipping=false} = {}) {
     '@/hooks/useOrders':{useOrders:()=>({data:null,loading:false,error:'',retry:()=>{}})},'@/utils/orderPayment':{paymentHref},
     '@/hooks/useCheckoutMethods':{useCheckoutMethods:()=>({...methods,loading:false,error:''})},'@/utils/checkoutMethods':{checkoutPaymentOptions},
     '@/utils/customerError':{customerErrorMessage},'./CheckoutMethodChoices':Choices,'@/hooks/useSiteConfig':{useSiteConfig:()=>({config:{currency:'TOMAN'},tenantId:'store',loading:false})},
-    '@/utils/format':format,'@/utils/cart':cartUtils,'@/components/shared/CartContext':{useCart:()=>({cart:[{id:'product',proUID:'sku',cartItemId:'item',quantity:1,price:100}],ready:true,dispatch:()=>{}})},
+    '@/utils/format':format,'@/utils/cart':cartUtils,'@/data/iranProvinces':iranProvinces,'@/components/shared/CartContext':{useCart:()=>({cart:[{id:'product',proUID:'sku',cartItemId:'item',quantity:1,price:100}],ready:true,dispatch:()=>{}})},
     '@/components/PreviewLink':props=>React.createElement('a',props,props.children)};
   const {code}=transformSync(source('components/shared/CheckoutClient.js'),{filename:'checkout.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'automatic'}}},module:{type:'commonjs'}});
   const module={exports:{}};
@@ -146,13 +158,19 @@ test('actual checkout selection invalidates Quote and submits only the explicitl
   assert.equal(next().props.disabled,true);
   const shipping=elements(tree).find(node=>node.type===Choices&&node.props.name==='shipping-method');
   shipping.props.onChange('post');tree=fixture.render();
+  const province=elements(tree).find(node=>node.type==='select'&&node.props.name==='province');
+  assert.equal(province.props.children[1].length,31);
+  province.props.onChange({target:{value:'تهران'}});tree=fixture.render();
+  const city=elements(tree).find(node=>node.type==='select'&&node.props.name==='city');
+  assert.equal(city.props.disabled,false);assert.ok(city.props.children[1].some(option=>option.props.value==='تهران'));
+  city.props.onChange({target:{name:'city',value:'تهران'}});tree=fixture.render();
   const address=elements(tree).find(node=>node.type==='textarea'&&node.props.name==='address');
   address.props.onChange({target:{name:'address',value:'نشانی آزمایشی'}});tree=fixture.render();
   assert.equal(next().props.disabled,false);
   await next().props.onClick();tree=fixture.render();assert.equal(fixture.quotes.length,1);assert.equal(fixture.orders.length,0);
   assert.equal(fixture.quotes[0][1],'post');assert.match(textContent(tree),/۲۳,۱۰۰ تومان/);assert.equal(next().props.disabled,true);
   const payment=elements(tree).find(node=>node.type===Choices&&node.props.name==='payment-method');
-  assert.equal(payment.props.options[0].name,'درگاه پرداخت فروشگاه');payment.props.onChange('online');tree=fixture.render();
+  assert.equal(payment.props.options[0].name,'درگاه پرداخت فروشگاه');assert.equal(payment.props.options[0].enabled,true);payment.props.onChange('online');tree=fixture.render();
   assert.doesNotMatch(textContent(tree),/در انتظار استعلام/);assert.equal(next().props.disabled,false);
   await next().props.onClick();tree=fixture.render();assert.equal(fixture.quotes.length,2);assert.equal(fixture.orders.length,0);
   const submit=elements(tree).find(node=>node.type==='button'&&textContent(node).trim()==='پرداخت');

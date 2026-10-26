@@ -14,6 +14,7 @@ import CheckoutMethodChoices from './CheckoutMethodChoices';
 import { useSiteConfig } from "@/hooks/useSiteConfig";
 import {formatMoney,normalizeDigits} from '@/utils/format';
 import {purchaseStorageScope} from '@/utils/cart';
+import iranProvinces from '@/data/iranProvinces';
 import { useCart } from "@/components/shared/CartContext";
 import Link from "@/components/PreviewLink";
 import { motion, AnimatePresence } from "framer-motion";
@@ -92,6 +93,8 @@ export default function CheckoutClient() {
     // Address or cart changes invalidate the visible price. Only a fresh server quote can be submitted.
     const cartFingerprint=JSON.stringify(cart.map(item=>[item.cartItemId,item.proUID,item.quantity]));
     const selectedShipping=shippingMethods.find(method=>method.id===shippingMethodId);
+    const selectedProvince=iranProvinces.find(province=>province.name===formData.province);
+    const cityOptions=selectedProvince?.cities||[];
     const paymentOptions=checkoutPaymentOptions(paymentMethods,paymentCheck);
     const selectedPayment=paymentOptions.find(method=>method.id===paymentMethodId&&method.enabled);
     const effectiveAddressId=selectedShipping?.requiresAddress===false?'':addressId;
@@ -123,7 +126,13 @@ export default function CheckoutClient() {
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
+        if(['province','city','address','postalCode'].includes(name))setAddressId('');
         setFormData((prev) => ({ ...prev, [name]: name==='postalCode'?normalizeDigits(value):value }));
+    };
+    const handleProvinceChange = (event) => {
+      setAddressId('');
+      setSubmitError('');
+      setFormData(previous=>({...previous,province:event.target.value,city:''}));
     };
 
     const itemsForCheckout=()=>cart.map(x=>({productId:String(x.id),variantId:String(x.proUID||''),quantity:String(x.quantity)}));
@@ -187,6 +196,8 @@ export default function CheckoutClient() {
       if(!shipping)throw Object.assign(new Error(),{code:'SHIPPING_METHOD_REQUIRED'});
       if(shipping.requiresAddress===false)return null;
       if(addressId)return addressId;
+      const province=iranProvinces.find(item=>item.name===formData.province);
+      if(!province||!province.cities.some(city=>city.name===formData.city))throw Object.assign(new Error(),{code:'LOCATION_REQUIRED'});
       if(!formData.address.trim())throw Object.assign(new Error(),{code:'ADDRESS_REQUIRED'});
       if(formData.postalCode&&!/^\d{10}$/.test(formData.postalCode))throw Object.assign(new Error(),{code:'POSTAL_CODE_INVALID'});
       const text=[formData.province,formData.city,formData.address,formData.postalCode?`کد پستی: ${formData.postalCode}`:''].filter(Boolean).join('، ');
@@ -387,22 +398,31 @@ export default function CheckoutClient() {
                                         />
                                     </div>
                                     <div className={`flex flex-col gap-2 ${selectedShipping?.requiresAddress===false?'hidden':''}`}>
-                                        <label className="text-sm font-medium text-gray-700">استان</label>
-                                        <input
+                                        <label className="text-sm font-medium text-gray-700" htmlFor="checkout-province">استان <span className="text-red-500">*</span></label>
+                                        <select
+                                            id="checkout-province"
                                             name="province"
                                             value={formData.province}
-                                            onChange={handleInputChange}
+                                            onChange={handleProvinceChange}
                                             className="px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
-                                        />
+                                        >
+                                            <option value="">انتخاب استان</option>
+                                            {iranProvinces.map(province=><option key={province.id} value={province.name}>{province.name}</option>)}
+                                        </select>
                                     </div>
                                     <div className={`flex flex-col gap-2 ${selectedShipping?.requiresAddress===false?'hidden':''}`}>
-                                        <label className="text-sm font-medium text-gray-700">شهر</label>
-                                        <input
+                                        <label className="text-sm font-medium text-gray-700" htmlFor="checkout-city">شهر <span className="text-red-500">*</span></label>
+                                        <select
+                                            id="checkout-city"
                                             name="city"
                                             value={formData.city}
                                             onChange={handleInputChange}
+                                            disabled={!selectedProvince}
                                             className="px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
-                                        />
+                                        >
+                                            <option value="">{selectedProvince?'انتخاب شهر':'ابتدا استان را انتخاب کنید'}</option>
+                                            {cityOptions.map(city=><option key={city.id} value={city.name}>{city.name}</option>)}
+                                        </select>
                                     </div>
                                     <div className={`col-span-1 md:col-span-2 flex flex-col gap-2 ${selectedShipping?.requiresAddress===false?'hidden':''}`}>
                                         <label className="text-sm font-medium text-gray-700">آدرس پستی دقیق <span className="text-red-500">*</span></label>
